@@ -1,0 +1,12 @@
+[package]
+name = "fragment"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3"
+opendal = "0.37"
+tokio = { version = "1.28.2", features = ["macros", "rt-multi-thread"] }
+bytes = "1.4.0"
