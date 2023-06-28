@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use super::err::DecodeError;
 use bincode;
 use serde::{Deserialize, Serialize};
@@ -6,8 +8,8 @@ const _INDEX_HEADER_MAGIC: u64 = 5201314;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct IndexMagicHeader {
-    index_header_magic: u64,
-    stack_id: u64,
+    pub index_header_magic: u64,
+    pub stack_id: u64,
 }
 
 impl IndexMagicHeader {
@@ -63,16 +65,17 @@ impl IndexRecord {
     pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<IndexRecord, DecodeError> {
         let mut buf = Vec::new();
         buf.resize(IndexRecord::size(), 0);
-        if let Ok(n) = r.read(&mut buf) {
-            if n != IndexRecord::size() {
-                return Err(DecodeError::ShortRead);
+        match r.read_exact(&mut buf) {
+            Ok(_) => {
+                if let Ok(rc) = bincode::deserialize(&buf) {
+                    return Ok(rc);
+                } else {
+                    return Err(DecodeError::DeserializeError);
+                }
             }
-            if let Ok(rc) = bincode::deserialize(&buf) {
-                return Ok(rc);
+            Err(e) => {
+                return Err(DecodeError::IOError);
             }
-            return Err(DecodeError::DeserializeError);
-        } else {
-            return Err(DecodeError::IOError);
         }
     }
 }

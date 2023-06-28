@@ -5,12 +5,12 @@ use super::err::DecodeError;
 
 const ALIGNMENT_SIZE: usize = 4096;
 
-const _DATA_FILE_HEADER_MAGIC_NUMBER: u64 = 47494638; // respects to GIF file header
+pub const _DATA_FILE_HEADER_MAGIC_NUMBER: u64 = 47494638; // respects to GIF file header
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DataMagicHeader {
-    data_magic_number: u64,
-    stack_id: u64,
+    pub data_magic_number: u64,
+    pub stack_id: u64,
 }
 
 impl DataMagicHeader {

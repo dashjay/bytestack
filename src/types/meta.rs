@@ -6,8 +6,8 @@ const _META_HEADER_MAGIC: u64 = 1314920;
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct MetaMagicHeader {
-    meta_magic_number: u64,
-    stack_id: u64,
+    pub meta_magic_number: u64,
+    pub stack_id: u64,
 }
 
 impl MetaMagicHeader {
@@ -71,8 +71,7 @@ impl MetaRecord {
     pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<MetaRecord, DecodeError> {
         match bincode::deserialize_from(r) {
             Ok(mr) => return Ok(mr),
-            Err(e) => {
-                println!("deserialize_from error: {}", e);
+            Err(_) => {
                 return Err(DecodeError::DeserializeError);
             }
         }

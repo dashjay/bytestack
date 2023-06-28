@@ -37,16 +37,16 @@ impl Writer {
     }
 
     pub fn write_files_magic_header(&mut self) {
-        self.write_data_header();
-        self.write_index_header();
-        self.write_meta_header();
+        self.write_data_header().unwrap();
+        self.write_index_header().unwrap();
+        self.write_meta_header().unwrap();
     }
 
     fn write_index_header(&mut self) -> Result<(), ErrorKind> {
         let index_file_header = IndexMagicHeader::new(self.stack_id);
         match bincode::serialize_into(self.index_writer.as_mut(), &index_file_header) {
             Ok(_) => return Ok(()),
-            Err(e) => {
+            Err(_) => {
                 return Err(ErrorKind::WriteError);
             }
         }
@@ -62,15 +62,12 @@ impl Writer {
     }
     fn write_meta_header(&mut self) -> Result<(), ErrorKind> {
         let meta_header = MetaMagicHeader::new(self.stack_id);
-        if let Ok(res) = serde_json::to_vec(&meta_header) {
-            match self.meta_writer.write(&res) {
-                Ok(_) => {return Ok(())},
-                Err(_) => {
-                    return Err(ErrorKind::WriteError);
-                }
+        match bincode::serialize_into(self.meta_writer.as_mut(), &meta_header) {
+            Ok(_) => return Ok(()),
+            Err(_) => {
+                return Err(ErrorKind::WriteError);
             }
         }
-        return Err(ErrorKind::MarshalJsonError);
     }
 
     fn write_index(&mut self, ir: IndexRecord) -> Result<(), ErrorKind> {
@@ -84,7 +81,6 @@ impl Writer {
     fn write_data(&mut self, dr: DataRecord) -> Result<(), ErrorKind> {
         match bincode::serialize_into(self.data_writer.as_mut(), &dr.header) {
             Ok(_) => {
-                println!("write data: {:?}", &dr.header);
                 self.data_cursor += DataRecordHeader::size() as u64;
             }
             Err(e) => {
@@ -93,7 +89,6 @@ impl Writer {
         }
         match self.data_writer.write(&dr.data) {
             Ok(n) => {
-                println!("write data len: {}", &dr.data.len());
                 self.data_cursor += n as u64;
             }
             Err(_) => {

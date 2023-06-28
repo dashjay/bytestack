@@ -15,24 +15,19 @@ fn main() {
         );
         writer.write_files_magic_header();
 
-        match writer.put(vec![0; 4096], String::from("file1")) {
+        let mut write_once = |filename: String| match writer.put(vec![0; 4096], filename) {
             Ok(_) => {}
             Err(e) => {
-                println!("{:?}", e)
+                panic!("{:?}", e);
             }
-        }
-        match writer.put(vec![1; 4096], String::from("file2")) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("{:?}", e)
-            }
-        }
-        match writer.put(vec![3; 4096], String::from("file3")) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("{:?}", e)
-            }
-        }
+        };
+        write_once(String::from("file1"));
+        write_once(String::from("file2"));
+        write_once(String::from("file3"));
+        write_once(String::from("file4"));
+        write_once(String::from("file5"));
+        write_once(String::from("file6"));
+        write_once(String::from("file7"));
     }
     {
         let data_file = File::open("/tmp/1.data").unwrap();
