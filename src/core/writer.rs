@@ -6,6 +6,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use super::err::ErrorKind;
+use crate::core::err::CustomError;
 
 pub struct Writer {
     index_writer: Box<dyn std::io::Write>,
@@ -46,8 +47,8 @@ impl Writer {
         let index_file_header = IndexMagicHeader::new(self.stack_id);
         match bincode::serialize_into(self.index_writer.as_mut(), &index_file_header) {
             Ok(_) => return Ok(()),
-            Err(_) => {
-                return Err(ErrorKind::WriteError);
+            Err(e) => {
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
     }
@@ -56,7 +57,7 @@ impl Writer {
         match bincode::serialize_into(self.data_writer.as_mut(), &data_file_header) {
             Ok(_) => return Ok(()),
             Err(e) => {
-                return Err(ErrorKind::WriteError);
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
     }
@@ -64,8 +65,8 @@ impl Writer {
         let meta_header = MetaMagicHeader::new(self.stack_id);
         match bincode::serialize_into(self.meta_writer.as_mut(), &meta_header) {
             Ok(_) => return Ok(()),
-            Err(_) => {
-                return Err(ErrorKind::WriteError);
+            Err(e) => {
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
     }
@@ -74,7 +75,7 @@ impl Writer {
         match bincode::serialize_into(self.index_writer.as_mut(), &ir) {
             Ok(_) => return Ok(()),
             Err(e) => {
-                return Err(ErrorKind::WriteError);
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
     }
@@ -84,25 +85,24 @@ impl Writer {
                 self.data_cursor += DataRecordHeader::size() as u64;
             }
             Err(e) => {
-                return Err(ErrorKind::WriteError);
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
         match self.data_writer.write(&dr.data) {
             Ok(n) => {
                 self.data_cursor += n as u64;
             }
-            Err(_) => {
-                return Err(ErrorKind::WriteError);
+            Err(e) => {
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
         match self.data_writer.write(&dr.padding) {
             Ok(n) => {
-                println!("write data len: {}", &dr.padding.len());
                 self.data_cursor += n as u64;
                 Ok(())
             }
-            Err(_) => {
-                return Err(ErrorKind::WriteError);
+            Err(e) => {
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
             }
         }
     }
@@ -110,7 +110,9 @@ impl Writer {
     fn write_meta(&mut self, mr: MetaRecord) -> Result<(), ErrorKind> {
         match bincode::serialize_into(&mut self.meta_writer, &mr) {
             Ok(()) => {Ok(())},
-            Err(_) => return Err(ErrorKind::MarshalJsonError),
+            Err(e) => {
+                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
+            } 
         }
     }
     pub fn put(&mut self, data: Vec<u8>, filename: String) -> Result<(), ErrorKind> {

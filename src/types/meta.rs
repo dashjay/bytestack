@@ -1,8 +1,8 @@
-use super::err::DecodeError;
+use super::err::{CustomError, DecodeError};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const _META_HEADER_MAGIC: u64 = 1314920;
+pub const _META_HEADER_MAGIC: u64 = 1314920;
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct MetaMagicHeader {
@@ -71,8 +71,10 @@ impl MetaRecord {
     pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<MetaRecord, DecodeError> {
         match bincode::deserialize_from(r) {
             Ok(mr) => return Ok(mr),
-            Err(_) => {
-                return Err(DecodeError::DeserializeError);
+            Err(e) => {
+                return Err(DecodeError::DeserializeError(CustomError::new(
+                    e.to_string(),
+                )));
             }
         }
     }

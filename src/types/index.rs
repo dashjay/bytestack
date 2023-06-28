@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use super::err::DecodeError;
+use super::err::{CustomError, DecodeError};
 use bincode;
 use serde::{Deserialize, Serialize};
 
-const _INDEX_HEADER_MAGIC: u64 = 5201314;
+pub const _INDEX_HEADER_MAGIC: u64 = 5201314;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct IndexMagicHeader {
@@ -66,15 +66,16 @@ impl IndexRecord {
         let mut buf = Vec::new();
         buf.resize(IndexRecord::size(), 0);
         match r.read_exact(&mut buf) {
-            Ok(_) => {
-                if let Ok(rc) = bincode::deserialize(&buf) {
-                    return Ok(rc);
-                } else {
-                    return Err(DecodeError::DeserializeError);
+            Ok(_) => match bincode::deserialize(&buf) {
+                Ok(rc) => return Ok(rc),
+                Err(e) => {
+                    return Err(DecodeError::DeserializeError(CustomError::new(
+                        e.to_string(),
+                    )));
                 }
-            }
+            },
             Err(e) => {
-                return Err(DecodeError::IOError);
+                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
             }
         }
     }

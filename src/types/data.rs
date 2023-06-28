@@ -1,11 +1,11 @@
 use bincode;
 use serde::{Deserialize, Serialize};
 
-use super::err::DecodeError;
+use super::err::{CustomError, DecodeError};
 
 const ALIGNMENT_SIZE: usize = 4096;
 
-pub const _DATA_FILE_HEADER_MAGIC_NUMBER: u64 = 47494638; // respects to GIF file header
+pub const _DATA_HEADER_MAGIC: u64 = 47494638; // respects to GIF file header
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DataMagicHeader {
@@ -16,7 +16,7 @@ pub struct DataMagicHeader {
 impl DataMagicHeader {
     pub fn new(stack_id: u64) -> Self {
         DataMagicHeader {
-            data_magic_number: _DATA_FILE_HEADER_MAGIC_NUMBER,
+            data_magic_number: _DATA_HEADER_MAGIC,
             stack_id: stack_id,
         }
     }
@@ -63,16 +63,31 @@ impl DataRecordHeader {
     pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<DataRecordHeader, DecodeError> {
         let mut buf = Vec::new();
         buf.resize(DataRecordHeader::size(), 0);
-        if let Ok(n) = r.read(&mut buf) {
-            if n != DataRecordHeader::size() {
-                return Err(DecodeError::ShortRead);
+        match r.read(&mut buf) {
+            Ok(n) => {
+                if n != DataRecordHeader::size() {
+                    return Err(DecodeError::ShortRead(CustomError::new(format!(
+                        "{} read mismatch the data_size {}",
+                        n,
+                        DataRecordHeader::size()
+                    ))));
+                }
+
+                match bincode::deserialize::<DataRecordHeader>(&buf) {
+                    Ok(drh) => {
+                        return Ok(drh);
+                    }
+                    Err(e) => {
+                        return Err(DecodeError::DeserializeError(CustomError::new(
+                            e.to_string(),
+                        )));
+                    }
+                }
             }
-            if let Ok(dhr) = bincode::deserialize::<DataRecordHeader>(&buf) {
-                return Ok(dhr);
+            Err(e) => {
+                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
             }
-            return Err(DecodeError::DeserializeError);
         }
-        return Err(DecodeError::IOError);
     }
 
     pub fn size() -> usize {
@@ -123,7 +138,11 @@ impl DataRecord {
             Ok(hdr) => {
                 let data_size = hdr.size as usize;
                 if data_size > data.len() - DataRecordHeader::size() {
-                    return Err(DecodeError::ShortRead);
+                    return Err(DecodeError::ShortRead(CustomError::new(format!(
+                        "record data_size {} > input data len {} - header_size",
+                        data_size,
+                        data.len()
+                    ))));
                 }
                 let data_bytes =
                     &data[DataRecordHeader::size()..data_size + DataRecordHeader::size()];
@@ -134,8 +153,10 @@ impl DataRecord {
                     padding: padding_bytes.to_vec(),
                 });
             }
-            Err(_) => {
-                return Err(DecodeError::DeserializeError);
+            Err(e) => {
+                return Err(DecodeError::DeserializeError(CustomError::new(
+                    e.to_string(),
+                )));
             }
         }
     }
@@ -149,30 +170,43 @@ impl DataRecord {
                 let padding_size = padding_data_size(data_size_usize) - data_size_usize;
                 let mut padding = Vec::new();
                 padding.resize(padding_size, 0);
-                if let Ok(n) = r.read(&mut data) {
-                    if n != data_size_usize{
-                        return Err(DecodeError::ShortRead);
+                match r.read(&mut data) {
+                    Ok(n) => {
+                        if n != data_size_usize {
+                            return Err(DecodeError::ShortRead(CustomError::new(format!(
+                                "{} read mismatch the data_size {}",
+                                n, data_size_usize
+                            ))));
+                        }
                     }
-                } else {
-                    return Err(DecodeError::IOError);
-                }
-                if let Ok(n) = r.read(&mut padding) {
-                    if n != padding_size{
-                        return Err(DecodeError::ShortRead);
+                    Err(e) => {
+                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
                     }
-                } else {
-                    return Err(DecodeError::IOError);
                 }
+                match r.read(&mut padding) {
+                    Ok(n) => {
+                        if n != padding_size {
+                            return Err(DecodeError::ShortRead(CustomError::new(format!(
+                                "{} read mismatch the data_size {}",
+                                n, padding_size
+                            ))));
+                        }
+                    }
+                    Err(e) => {
+                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+                    }
+                }
+
                 Ok(DataRecord {
                     header: hdr,
                     data: data,
                     padding: padding,
                 })
-            },
-            Err(e)=>{Err(e)}
+            }
+            Err(e) => Err(e),
         }
     }
-    
+
     pub fn size(&self) -> usize {
         DataRecordHeader::size() + self.data.len() + self.padding.len()
     }

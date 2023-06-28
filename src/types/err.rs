@@ -1,6 +1,15 @@
 #[derive(Debug)]
-pub enum DecodeError{
-    DeserializeError,
-    IOError,
-    ShortRead,
+pub struct CustomError {
+    pub origin: String,
+}
+impl CustomError {
+    pub fn new(err: String) -> Self {
+        return CustomError { origin: err };
+    }
+}
+
+pub enum DecodeError {
+    DeserializeError(CustomError),
+    IOError(CustomError),
+    ShortRead(CustomError),
 }

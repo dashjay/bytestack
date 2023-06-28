@@ -1,10 +1,9 @@
-use super::err::ErrorKind;
-
 use crate::types::{
-    data::{_DATA_FILE_HEADER_MAGIC_NUMBER,DataMagicHeader, DataRecord},
-    index::{IndexMagicHeader, IndexRecord},
-    meta::{MetaMagicHeader, MetaRecord},
+    data::{DataMagicHeader, DataRecord, _DATA_HEADER_MAGIC},
+    index::{IndexMagicHeader, IndexRecord, _INDEX_HEADER_MAGIC},
+    meta::{MetaMagicHeader, MetaRecord, _META_HEADER_MAGIC},
 };
+
 pub struct Reader {
     index_reader: Box<dyn std::io::Read>,
     data_reader: Box<dyn std::io::Read>,
@@ -18,29 +17,15 @@ impl Iterator for Reader {
         let result_ir = IndexRecord::new_from_reader(&mut self.index_reader);
         let result_mr = MetaRecord::new_from_reader(&mut self.meta_reader);
         let result_dr = DataRecord::new_from_reader(&mut self.data_reader);
-        match result_ir {
-            Ok(ir) => {
-                match result_mr{
-                    Ok(mr)=>{
-                        match result_dr{
-                            Ok(dr)=>{
-                                return Some((ir, mr, dr))
-                            },
-                            Err(_)=>{
-                                return None
-                            }
-                        }
-                    },
-                    Err(_)=>{
-                        return None
-                    },
+
+        if let Ok(ir) = result_ir {
+            if let Ok(mr) = result_mr {
+                if let Ok(dr) = result_dr {
+                    return Some((ir, mr, dr));
                 }
             }
-            Err(_) => {
-                return None;
-            },
         }
-        
+        return None;
     }
 }
 
@@ -67,7 +52,7 @@ impl Reader {
             assert!(buf.len() == IndexMagicHeader::size());
             let imh = bincode::deserialize::<IndexMagicHeader>(&buf).unwrap();
             assert!(imh.stack_id == self.stack_id);
-            assert!(imh.index_header_magic == _DATA_FILE_HEADER_MAGIC_NUMBER)
+            assert!(imh.index_header_magic == _INDEX_HEADER_MAGIC)
         }
         {
             let mut buf: Vec<u8> = Vec::new();
@@ -76,6 +61,7 @@ impl Reader {
             assert!(buf.len() == DataMagicHeader::size());
             let dmh = bincode::deserialize::<DataMagicHeader>(&buf).unwrap();
             assert!(dmh.stack_id == self.stack_id);
+            assert!(dmh.data_magic_number == _DATA_HEADER_MAGIC)
         }
         {
             let mut buf: Vec<u8> = Vec::new();
@@ -84,6 +70,7 @@ impl Reader {
             assert!(buf.len() == MetaMagicHeader::size());
             let mmh = bincode::deserialize::<MetaMagicHeader>(&buf).unwrap();
             assert!(mmh.stack_id == self.stack_id);
+            assert!(mmh.meta_magic_number == _META_HEADER_MAGIC);
         }
     }
 }
