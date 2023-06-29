@@ -6,12 +6,12 @@ fn main() {
     {
         let data_file = File::create("/tmp/1.data").unwrap();
         let meta_file = File::create("/tmp/1.meta").unwrap();
-        let index_file = File::create("/tmp/1.index").unwrap();
+        let index_file = File::create("/tmp/1.idx").unwrap();
         let mut writer = Writer::new(
             1,
-            Box::new(index_file),
-            Box::new(data_file),
-            Box::new(meta_file),
+            index_file,
+            data_file,
+            meta_file,
         );
         writer.write_files_magic_header();
 
@@ -21,23 +21,21 @@ fn main() {
                 panic!("{:?}", e);
             }
         };
-        write_once(String::from("file1"));
-        write_once(String::from("file2"));
-        write_once(String::from("file3"));
-        write_once(String::from("file4"));
-        write_once(String::from("file5"));
-        write_once(String::from("file6"));
-        write_once(String::from("file7"));
+        let mut i = 0;
+        while i < 100{
+            write_once(String::from(format!("file-{}",i)));
+            i+=1
+        }
     }
     {
         let data_file = File::open("/tmp/1.data").unwrap();
         let meta_file = File::open("/tmp/1.meta").unwrap();
-        let index_file = File::open("/tmp/1.index").unwrap();
+        let index_file = File::open("/tmp/1.idx").unwrap();
         let mut reader = Reader::new(
             1,
-            Box::new(index_file),
-            Box::new(data_file),
-            Box::new(meta_file),
+            index_file,
+            data_file,
+            meta_file,
         );
         reader.read_and_check_magic_header();
         for (ir, mr, dr) in reader {

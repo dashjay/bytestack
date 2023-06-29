@@ -8,10 +8,13 @@ pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use super::err::ErrorKind;
 use crate::core::err::CustomError;
 
-pub struct Writer {
-    index_writer: Box<dyn std::io::Write>,
-    data_writer: Box<dyn std::io::Write>,
-    meta_writer: Box<dyn std::io::Write>,
+pub struct Writer<T>
+where
+    T: std::io::Read + std::io::Seek + std::io::Write,
+{
+    index_writer: T,
+    data_writer: T,
+    meta_writer: T,
 
     data_cursor: u64,
     meta_cursor: u64,
@@ -19,13 +22,11 @@ pub struct Writer {
     stack_id: u64,
 }
 
-impl Writer {
-    pub fn new(
-        stack_id: u64,
-        iw: Box<dyn std::io::Write>,
-        dw: Box<dyn std::io::Write>,
-        mw: Box<dyn std::io::Write>,
-    ) -> Self {
+impl<T> Writer<T>
+where
+    T: std::io::Read + std::io::Seek + std::io::Write,
+{
+    pub fn new(stack_id: u64, iw: T, dw: T, mw: T) -> Self {
         Writer {
             index_writer: iw,
             data_writer: dw,
@@ -45,7 +46,7 @@ impl Writer {
 
     fn write_index_header(&mut self) -> Result<(), ErrorKind> {
         let index_file_header = IndexMagicHeader::new(self.stack_id);
-        match bincode::serialize_into(self.index_writer.as_mut(), &index_file_header) {
+        match bincode::serialize_into(&mut self.index_writer, &index_file_header) {
             Ok(_) => return Ok(()),
             Err(e) => {
                 return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
@@ -54,7 +55,7 @@ impl Writer {
     }
     fn write_data_header(&mut self) -> Result<(), ErrorKind> {
         let data_file_header = DataMagicHeader::new(self.stack_id);
-        match bincode::serialize_into(self.data_writer.as_mut(), &data_file_header) {
+        match bincode::serialize_into(&mut self.data_writer, &data_file_header) {
             Ok(_) => return Ok(()),
             Err(e) => {
                 return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
@@ -63,7 +64,7 @@ impl Writer {
     }
     fn write_meta_header(&mut self) -> Result<(), ErrorKind> {
         let meta_header = MetaMagicHeader::new(self.stack_id);
-        match bincode::serialize_into(self.meta_writer.as_mut(), &meta_header) {
+        match bincode::serialize_into(&mut self.meta_writer, &meta_header) {
             Ok(_) => return Ok(()),
             Err(e) => {
                 return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
@@ -72,7 +73,7 @@ impl Writer {
     }
 
     fn write_index(&mut self, ir: IndexRecord) -> Result<(), ErrorKind> {
-        match bincode::serialize_into(self.index_writer.as_mut(), &ir) {
+        match bincode::serialize_into(&mut self.index_writer, &ir) {
             Ok(_) => return Ok(()),
             Err(e) => {
                 return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
@@ -80,7 +81,7 @@ impl Writer {
         }
     }
     fn write_data(&mut self, dr: DataRecord) -> Result<(), ErrorKind> {
-        match bincode::serialize_into(self.data_writer.as_mut(), &dr.header) {
+        match bincode::serialize_into(&mut self.data_writer, &dr.header) {
             Ok(_) => {
                 self.data_cursor += DataRecordHeader::size() as u64;
             }
@@ -109,10 +110,10 @@ impl Writer {
 
     fn write_meta(&mut self, mr: MetaRecord) -> Result<(), ErrorKind> {
         match bincode::serialize_into(&mut self.meta_writer, &mr) {
-            Ok(()) => {Ok(())},
+            Ok(()) => Ok(()),
             Err(e) => {
                 return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            } 
+            }
         }
     }
     pub fn put(&mut self, data: Vec<u8>, filename: String) -> Result<(), ErrorKind> {

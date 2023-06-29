@@ -4,14 +4,20 @@ use crate::types::{
     meta::{MetaMagicHeader, MetaRecord, _META_HEADER_MAGIC},
 };
 
-pub struct Reader {
-    index_reader: Box<dyn std::io::Read>,
-    data_reader: Box<dyn std::io::Read>,
-    meta_reader: Box<dyn std::io::Read>,
+pub struct Reader<T>
+where
+    T: std::io::Read + std::io::Seek,
+{
+    index_reader: T,
+    data_reader: T,
+    meta_reader: T,
     stack_id: u64,
 }
 
-impl Iterator for Reader {
+impl<T> Iterator for Reader<T>
+where
+    T: std::io::Read + std::io::Seek,
+{
     type Item = (IndexRecord, MetaRecord, DataRecord);
     fn next(&mut self) -> Option<Self::Item> {
         let result_ir = IndexRecord::new_from_reader(&mut self.index_reader);
@@ -29,12 +35,15 @@ impl Iterator for Reader {
     }
 }
 
-impl Reader {
+impl<T> Reader<T>
+where
+    T: std::io::Read + std::io::Seek,
+{
     pub fn new(
         stack_id: u64,
-        ir: Box<dyn std::io::Read>,
-        dr: Box<dyn std::io::Read>,
-        mr: Box<dyn std::io::Read>,
+        ir: T,
+        dr: T,
+        mr: T,
     ) -> Self {
         Reader {
             index_reader: ir,
