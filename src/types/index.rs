@@ -1,8 +1,9 @@
-use std::fmt::Debug;
-
 use super::err::{CustomError, DecodeError};
 use bincode;
+use futures::{AsyncReadExt};
+use opendal::Reader;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 pub const _INDEX_HEADER_MAGIC: u64 = 5201314;
 
@@ -66,6 +67,24 @@ impl IndexRecord {
         let mut buf = Vec::new();
         buf.resize(IndexRecord::size(), 0);
         match r.read_exact(&mut buf) {
+            Ok(_) => match bincode::deserialize(&buf) {
+                Ok(rc) => return Ok(rc),
+                Err(e) => {
+                    return Err(DecodeError::DeserializeError(CustomError::new(
+                        e.to_string(),
+                    )));
+                }
+            },
+            Err(e) => {
+                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+            }
+        }
+    }
+
+    pub async fn new_from_future_reader(r: &mut Reader) -> Result<IndexRecord, DecodeError> {
+        let mut buf = Vec::new();
+        buf.resize(IndexRecord::size(), 0);
+        match r.read_exact(&mut buf).await {
             Ok(_) => match bincode::deserialize(&buf) {
                 Ok(rc) => return Ok(rc),
                 Err(e) => {

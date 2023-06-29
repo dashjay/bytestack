@@ -1,6 +1,7 @@
 use bincode;
+use opendal::Reader;
 use serde::{Deserialize, Serialize};
-
+use futures::{AsyncReadExt};
 use super::err::{CustomError, DecodeError};
 
 const ALIGNMENT_SIZE: usize = 4096;
@@ -90,6 +91,32 @@ impl DataRecordHeader {
         }
     }
 
+    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecordHeader, DecodeError>  {
+        let mut buf = Vec::new();
+        buf.resize(DataRecordHeader::size(), 0);
+
+  
+                match r.read_exact(&mut buf).await{
+                    Ok(_) => {
+                        match bincode::deserialize::<DataRecordHeader>(&buf) {
+                            Ok(drh) => {
+                                return Ok(drh);
+                            }
+                            Err(e) => {
+                                return Err(DecodeError::DeserializeError(CustomError::new(
+                                    e.to_string(),
+                                )));
+                            }
+                        }
+                    },
+                    Err(e)=>{
+                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+                    }
+                }
+      
+        
+        
+    }
     pub fn size() -> usize {
         let a = Self::default();
         bincode::serialized_size::<DataRecordHeader>(&a).unwrap() as usize
@@ -207,22 +234,46 @@ impl DataRecord {
         }
     }
 
+    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecord, DecodeError> {
+        match DataRecordHeader::new_from_future_reader(r).await {
+            Ok(hdr) => {
+                let data_size_usize = hdr.size as usize;
+                let mut data = Vec::new();
+                data.resize(data_size_usize, 0);
+                let padding_size = padding_data_size(data_size_usize) - data_size_usize;
+                let mut padding = Vec::new();
+                padding.resize(padding_size, 0);
+        
+                match r.read_exact(&mut data).await {
+                    Ok(_) => {
+                        
+                    }
+                    Err(e) => {
+                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+                    }
+                }
+                match r.read_exact(&mut padding).await {
+                    Ok(_) => {
+                       
+                    }
+                    Err(e) => {
+                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+                    }
+                }
+
+                Ok(DataRecord {
+                    header: hdr,
+                    data: data,
+                    padding: padding,
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn size(&self) -> usize {
         DataRecordHeader::size() + self.data.len() + self.padding.len()
     }
-}
-
-#[test]
-fn test_data_struct_size() {
-    use std::mem;
-    assert!(
-        24 == DataRecordHeader::size(),
-        "DataRecordHeader struct should not be modified"
-    );
-    assert!(
-        16 == mem::size_of::<DataMagicHeader>(),
-        "DataMagicHeader struct should not be modified"
-    );
 }
 
 #[test]

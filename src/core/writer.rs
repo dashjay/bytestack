@@ -2,9 +2,9 @@ use crate::types::data::{DataMagicHeader, DataRecordHeader};
 use crate::types::meta::MetaMagicHeader;
 use crate::types::{data::DataRecord, index::*, meta::MetaRecord};
 use crc::{Crc, CRC_32_ISCSI};
+pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use rand::rngs::ThreadRng;
 use rand::Rng;
-pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use super::err::ErrorKind;
 use crate::core::err::CustomError;
 

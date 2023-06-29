@@ -1,50 +1,42 @@
-use bytestack::core::reader::Reader;
-use bytestack::core::writer::Writer;
-use std::fs::File;
-use std::os::unix::prelude::FileExt;
+use bytestack::core::bytestack::ByteStackReader;
+use bytestack::core::bytestack::ByteStackWriter;
+use opendal::services::Memory;
+use opendal::Operator;
+use opendal::Result;
 
-fn main() {
-    {
-        let data_file = File::create("/tmp/1.data").unwrap();
-        let meta_file = File::create("/tmp/1.meta").unwrap();
-        let index_file = File::create("/tmp/1.idx").unwrap();
-        let mut writer = Writer::new(
-            1,
-            index_file,
-            data_file,
-            meta_file,
-        );
-        writer.write_files_magic_header();
+#[tokio::main]
+async fn main() -> Result<()> {
+    let op = Operator::new(Memory::default())?.finish();
+    let iw = op.writer_with("1.idx").await.unwrap();
+    let mw = op.writer_with("1.meta").await.unwrap();
+    let dw = op.writer_with("1.data").await.unwrap();
+    let mut bsw = ByteStackWriter::new(1, iw, mw, dw);
+    bsw.write_files_magic_header().await;
 
-        let mut write_once = |filename: String| match writer.put(vec![0; 4096], filename) {
-            Ok(_) => {}
+    let mut i = 0;
+    while i < 100 {
+        match bsw.put(vec![0; 4096], format!("file-{}", i)).await {
+            Ok(_) => {
+                println!("{} write", i);
+            }
             Err(e) => {
                 panic!("{:?}", e);
             }
-        };
-        let mut i = 0;
-        while i < 100{
-            write_once(String::from(format!("file-{}",i)));
-            i+=1
+        }
+        i += 1;
+    }
+    bsw.close().await;
+
+    let ir = op.reader_with("1.idx").await.unwrap();
+    let mr = op.reader_with("1.meta").await.unwrap();
+    let dr = op.reader_with("1.data").await.unwrap();
+    let mut bsr = ByteStackReader::new(1, ir, mr, dr);
+    loop {
+        if let Some((ir, mr, dr)) = bsr.next().await {
+            println!("ir: {:?}\nmr: {:?}\ndr: {:?}\n", &ir, &mr, dr.header)
+        } else {
+            break;
         }
     }
-    {
-        let data_file = File::open("/tmp/1.data").unwrap();
-        let meta_file = File::open("/tmp/1.meta").unwrap();
-        let index_file = File::open("/tmp/1.idx").unwrap();
-        let mut reader = Reader::new(
-            1,
-            index_file,
-            data_file,
-            meta_file,
-        );
-        reader.read_and_check_magic_header();
-        for (ir, mr, dr) in &mut reader {
-            println!("ir: {:?}\nmr: {:?}\ndr: {:?}\n", &ir, &mr, dr.header)
-        }
-        reader.reset_to_head();
-        for (ir, mr, dr) in &mut reader {
-            println!("ir: {:?}\nmr: {:?}\ndr: {:?}\n", &ir, &mr, dr.header)
-        }
-    }
+    Ok(())
 }
