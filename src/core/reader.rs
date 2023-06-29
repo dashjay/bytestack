@@ -8,21 +8,21 @@ pub struct Reader<T>
 where
     T: std::io::Read + std::io::Seek,
 {
-    index_reader: T,
-    data_reader: T,
-    meta_reader: T,
+    index_reader: Box<T>,
+    data_reader: Box<T>,
+    meta_reader: Box<T>,
     stack_id: u64,
 }
 
-impl<T> Iterator for Reader<T>
+impl<T> Iterator for &mut Reader<T>
 where
-    T: std::io::Read + std::io::Seek,
+    T: std::io::Read + std::io::Seek 
 {
     type Item = (IndexRecord, MetaRecord, DataRecord);
     fn next(&mut self) -> Option<Self::Item> {
-        let result_ir = IndexRecord::new_from_reader(&mut self.index_reader);
-        let result_mr = MetaRecord::new_from_reader(&mut self.meta_reader);
-        let result_dr = DataRecord::new_from_reader(&mut self.data_reader);
+        let result_ir = IndexRecord::new_from_reader(self.index_reader.as_mut());
+        let result_mr = MetaRecord::new_from_reader(self.meta_reader.as_mut());
+        let result_dr = DataRecord::new_from_reader(self.data_reader.as_mut());
 
         if let Ok(ir) = result_ir {
             if let Ok(mr) = result_mr {
@@ -39,18 +39,20 @@ impl<T> Reader<T>
 where
     T: std::io::Read + std::io::Seek,
 {
-    pub fn new(
-        stack_id: u64,
-        ir: T,
-        dr: T,
-        mr: T,
-    ) -> Self {
+    pub fn new(stack_id: u64, ir: T, dr: T, mr: T) -> Self {
         Reader {
-            index_reader: ir,
-            data_reader: dr,
-            meta_reader: mr,
+            index_reader: Box::new(ir),
+            data_reader: Box::new(dr),
+            meta_reader: Box::new(mr),
             stack_id: stack_id,
         }
+    }
+
+    pub fn reset_to_head(&mut self) {
+        self.index_reader.as_mut().seek(std::io::SeekFrom::Start(0)).unwrap();
+        self.data_reader.as_mut().seek(std::io::SeekFrom::Start(0)).unwrap();
+        self.meta_reader.as_mut().seek(std::io::SeekFrom::Start(0)).unwrap();
+        self.read_and_check_magic_header()
     }
 
     pub fn read_and_check_magic_header(&mut self) {

@@ -1,6 +1,7 @@
 use bytestack::core::reader::Reader;
 use bytestack::core::writer::Writer;
 use std::fs::File;
+use std::os::unix::prelude::FileExt;
 
 fn main() {
     {
@@ -38,7 +39,11 @@ fn main() {
             meta_file,
         );
         reader.read_and_check_magic_header();
-        for (ir, mr, dr) in reader {
+        for (ir, mr, dr) in &mut reader {
+            println!("ir: {:?}\nmr: {:?}\ndr: {:?}\n", &ir, &mr, dr.header)
+        }
+        reader.reset_to_head();
+        for (ir, mr, dr) in &mut reader {
             println!("ir: {:?}\nmr: {:?}\ndr: {:?}\n", &ir, &mr, dr.header)
         }
     }
