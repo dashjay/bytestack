@@ -31,6 +31,7 @@ pub struct MetaRecord {
     file_offset: u64,
     cookie: u32,
     file_size: u32,
+    filename: String,
     extra: Vec<u8>,
 }
 
@@ -52,12 +53,19 @@ fn current_time() -> u64 {
 }
 
 impl MetaRecord {
-    pub fn new(file_offset: u64, cookie: u32, file_size: u32, extra: Vec<u8>) -> Self {
+    pub fn new(
+        file_offset: u64,
+        cookie: u32,
+        file_size: u32,
+        filename: String,
+        extra: Vec<u8>,
+    ) -> Self {
         MetaRecord {
             create_time: current_time(),
             file_offset: file_offset,
             cookie: cookie,
             file_size: file_size,
+            filename: filename,
             extra: extra,
         }
     }

@@ -54,7 +54,7 @@ impl IndexRecord {
         }
     }
 
-    pub fn index_id(self) -> String {
+    pub fn index_id(&self) -> String {
         let mut temp = Vec::with_capacity(12);
         temp.extend_from_slice(&self.offset_data.to_le_bytes());
         temp.extend_from_slice(&self.cookie.to_le_bytes());

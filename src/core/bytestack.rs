@@ -4,19 +4,19 @@ use crate::types::{
     index::{IndexMagicHeader, IndexRecord, _INDEX_HEADER_MAGIC},
     meta::{MetaMagicHeader, MetaRecord, _META_HEADER_MAGIC},
 };
-use bincode;
 use crc::{Crc, CRC_32_ISCSI};
+pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
+use bincode;
 use futures::TryStreamExt;
 use opendal::services::S3;
 use opendal::EntryMode;
-use opendal::FutureWriter;
 use opendal::Metakey;
 use opendal::Operator;
+use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::env;
+use std::sync::Mutex;
 use tokio::io::AsyncReadExt;
-pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
-use rand::rngs::ThreadRng;
 use url::Url;
 
 type Item = (IndexRecord, MetaRecord, DataRecord);
@@ -86,19 +86,19 @@ impl StackReader {
                 match reader.read(&mut buf).await {
                     Ok(_) => {}
                     Err(e) => {
-                        return Err(ErrorKind::ReadError(CustomError::new(e.to_string())));
+                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
                     }
                 }
                 let deserialized = match bincode::deserialize::<IndexMagicHeader>(&buf) {
                     Ok(h) => h,
                     Err(e) => {
-                        return Err(ErrorKind::ReadError(CustomError::new(e.to_string())));
+                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
                     }
                 };
                 deserialized
             }
             Err(e) => {
-                return Err(ErrorKind::ReadError(CustomError::new(e.to_string())));
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
             }
         };
 
@@ -115,14 +115,14 @@ impl StackReader {
         {
             Ok(bs) => bs,
             Err(e) => {
-                return Err(ErrorKind::ReadError(CustomError::new(e.to_string())));
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
             }
         };
         for chunk in bs.chunks(IndexRecord::size()) {
             let ir = match bincode::deserialize::<IndexRecord>(chunk) {
                 Ok(ir) => ir,
                 Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
+                    return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
                 }
             };
             out.push(format!("{},{}", stack_id, ir.index_id()))
@@ -154,10 +154,10 @@ impl StackReader {
                 .operator
                 .range_read(&data_file_path, data_offset..data_offset + 4096)
                 .await
-                .map_err(|e| ErrorKind::WriteError(CustomError::new(e.to_string())))?;
+                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
 
             let drh = bincode::deserialize::<DataRecordHeader>(&dat[..DataRecordHeader::size()])
-                .map_err(|e| ErrorKind::ReadError(CustomError::new(e.to_string())))?;
+                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
 
             assert_eq!(drh.cookie(), cookie);
             if drh.data_size() < 4096 - (DataRecordHeader::size() as u32) {
@@ -172,23 +172,107 @@ impl StackReader {
                     data_offset + 4096..data_offset + drh.data_size() as u64 - 4096,
                 )
                 .await
-                .map_err(|e| ErrorKind::WriteError(CustomError::new(e.to_string())))?;
+                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
             dat.extend_from_slice(&dat_after_first_4096);
             Ok(dat)
         } else {
-            Err(ErrorKind::WriteError(CustomError::new(
+            Err(ErrorKind::IOError(CustomError::new(
                 "invalid index id".to_string(),
             )))
         }
     }
 }
 
+struct InnerWriter {
+    data_offset: u64,
+    meta_offset: u64,
+    rng: ThreadRng,
+    _current_index_writer: Writer,
+    _current_meta_writer: Writer,
+    _current_data_writer: Writer,
+}
+
+impl InnerWriter {
+    async fn close(mut self) -> Result<(), ErrorKind> {
+        if let Err(err) = self._current_data_writer.close().await {
+            return Err(ErrorKind::CloseError(CustomError::new(err.to_string())));
+        }
+        if let Err(err) = self._current_meta_writer.close().await {
+            return Err(ErrorKind::CloseError(CustomError::new(err.to_string())));
+        }
+        if let Err(err) = self._current_index_writer.close().await {
+            return Err(ErrorKind::CloseError(CustomError::new(err.to_string())));
+        }
+        Ok(())
+    }
+
+    async fn write_index(&mut self, ir: IndexRecord) -> Result<(), ErrorKind> {
+        let data_bytes = bincode::serialize(&ir).unwrap();
+        match self._current_index_writer.write(data_bytes).await {
+            Ok(_) => return Ok(()),
+            Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
+        }
+    }
+    async fn write_meta(&mut self, mr: MetaRecord) -> Result<(), ErrorKind> {
+        let data_bytes = bincode::serialize(&mr).unwrap();
+        match self._current_meta_writer.write(data_bytes).await {
+            Ok(_) => return Ok(()),
+            Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
+        }
+    }
+    async fn write_data(&mut self, dr: DataRecord) -> Result<(), ErrorKind> {
+        let data_bytes = bincode::serialize(&dr.header).unwrap();
+        match self._current_meta_writer.write(data_bytes).await {
+            Ok(_) => {}
+            Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
+        }
+        match self._current_meta_writer.write(dr.data).await {
+            Ok(_) => {}
+            Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
+        }
+        match self._current_meta_writer.write(dr.padding).await {
+            Ok(_) => Ok(()),
+            Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
+        }
+    }
+
+    async fn write(
+        &mut self,
+        buf: Vec<u8>,
+        filename: String,
+        meta: Option<Vec<u8>>,
+    ) -> Result<String, ErrorKind> {
+        let meta = match meta {
+            Some(meta) => meta,
+            None => Vec::new(),
+        };
+        let crc_sum = CASTAGNOLI.checksum(&buf);
+        let cookie: u32 = self.rng.gen();
+        let ir = IndexRecord::new(cookie, buf.len() as u32, self.data_offset, self.meta_offset);
+        let mr = MetaRecord::new(self.data_offset, cookie, buf.len() as u32, filename, meta);
+        let index_id = ir.index_id();
+        let dr = DataRecord::new(cookie, buf.len() as u32, crc_sum, buf);
+
+        match self.write_index(ir).await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        match self.write_meta(mr).await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        match self.write_data(dr).await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        Ok(index_id)
+    }
+}
+
 pub struct StackWriter {
     operator: Operator,
     prefix: String,
-    _current_index_writer: Option<FutureWriter>,
-    _current_meta_writer: Option<FutureWriter>,
-    _current_data_writer: Option<FutureWriter>,
+    inner_writer: Mutex<Option<InnerWriter>>,
 }
 
 impl StackWriter {
@@ -196,9 +280,7 @@ impl StackWriter {
         StackWriter {
             operator: operator,
             prefix: prefix,
-            _current_index_writer: None,
-            _current_meta_writer: None,
-            _current_data_writer: None,
+            inner_writer: Mutex::<Option<InnerWriter>>::new(None),
         }
     }
 
@@ -206,212 +288,38 @@ impl StackWriter {
         &self,
         buf: Vec<u8>,
         filename: String,
-        meta: Vec<(String, String)>,
+        meta: Option<Vec<u8>>,
     ) -> Result<String, ErrorKind> {
-        todo!()
-    }
-}
-
-pub struct ByteStackReader {
-    stack_id: i64,
-    _index_reader: Reader,
-    _meta_reader: Reader,
-    _data_reader: Reader,
-}
-
-impl ByteStackReader {
-    pub fn new(stack_id: i64, i: Reader, m: Reader, d: Reader) -> Self {
-        ByteStackReader {
-            stack_id: stack_id,
-            _index_reader: i,
-            _meta_reader: m,
-            _data_reader: d,
-        }
-    }
-    pub async fn next(&mut self) -> Option<Item> {
-        let result_ir = IndexRecord::new_from_future_reader(&mut self._index_reader).await;
-        let result_mr = MetaRecord::new_from_future_reader(&mut self._meta_reader).await;
-        let result_dr = DataRecord::new_from_future_reader(&mut self._data_reader).await;
-
-        if let Ok(ir) = result_ir {
-            if let Ok(mr) = result_mr {
-                if let Ok(dr) = result_dr {
-                    return Some((ir, mr, dr));
+        match  self.inner_writer.lock() {
+            Ok(mut mu)=>{
+                match mu.take(){
+                    Some(mut writer)=>{
+                        match writer.write(buf, filename, meta).await {
+                            Ok(id) => {
+                                return Ok(id);
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    },
+                    None=>{
+                        panic!("should init writer")
+                    }
                 }
-            }
-        }
-        return None;
-    }
-}
-
-pub struct ByteStackWriter {
-    stack_id: u64,
-    _index_writer: Writer,
-    _meta_writer: Writer,
-    _data_writer: Writer,
-    rng: ThreadRng,
-    data_cursor: u64,
-    meta_cursor: u64,
-}
-
-impl ByteStackWriter {
-    pub fn new(stack_id: u64, i: Writer, m: Writer, d: Writer) -> Self {
-        ByteStackWriter {
-            stack_id: stack_id,
-            _index_writer: i,
-            _meta_writer: m,
-            _data_writer: d,
-            data_cursor: 0,
-            meta_cursor: 0,
-            rng: rand::thread_rng(),
-        }
-    }
-
-    pub async fn write_files_magic_header(&mut self) {
-        self.write_data_header().await.unwrap();
-        self.write_index_header().await.unwrap();
-        self.write_meta_header().await.unwrap();
-    }
-
-    async fn write_index_header(&mut self) -> Result<(), ErrorKind> {
-        let index_file_header = IndexMagicHeader::new(self.stack_id);
-        match bincode::serialize(&index_file_header) {
-            Ok(data) => match self._index_writer.write(data).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-    }
-    async fn write_data_header(&mut self) -> Result<(), ErrorKind> {
-        let data_file_header = DataMagicHeader::new(self.stack_id);
-        match bincode::serialize(&data_file_header) {
-            Ok(data) => match self._data_writer.write(data).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-    }
-    async fn write_meta_header(&mut self) -> Result<(), ErrorKind> {
-        let meta_header = MetaMagicHeader::new(self.stack_id);
-        match bincode::serialize(&meta_header) {
-            Ok(data) => match self._meta_writer.write(data).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
+            },Err(e)=>{
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())))
             }
         }
     }
 
-    async fn write_index(&mut self, ir: IndexRecord) -> Result<(), ErrorKind> {
-        match bincode::serialize(&ir) {
-            Ok(data) => match self._index_writer.write(data).await {
-                Ok(_) => {
-                    self.meta_cursor += IndexRecord::size() as u64;
-                    Ok(())
-                }
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
+    pub async fn close(&self) -> Result<(), ErrorKind> {
+        if let Ok(mut mu) = self.inner_writer.lock() {
+            if let Some(writer) = mu.take() {
+                writer.close().await?
             }
         }
-    }
-    async fn write_data(&mut self, dr: DataRecord) -> Result<(), ErrorKind> {
-        match bincode::serialize(&dr.header) {
-            Ok(data) => match self._data_writer.write(data).await {
-                Ok(_) => {
-                    self.data_cursor += DataRecordHeader::size() as u64;
-                }
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-        let data_len = dr.data.len();
-        match self._data_writer.write(dr.data).await {
-            Ok(n) => {
-                self.data_cursor += data_len as u64;
-            }
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-
-        let padding_len = dr.padding.len();
-        match self._data_writer.write(dr.padding).await {
-            Ok(n) => {
-                self.data_cursor += padding_len as u64;
-                Ok(())
-            }
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-    }
-    async fn write_meta(&mut self, mr: MetaRecord) -> Result<(), ErrorKind> {
-        match bincode::serialize(&mr) {
-            Ok(data) => match self._meta_writer.write(data).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-                }
-            },
-            Err(e) => {
-                return Err(ErrorKind::WriteError(CustomError::new(e.to_string())));
-            }
-        }
-    }
-
-    pub async fn put(&mut self, data: Vec<u8>, filename: String) -> Result<(), ErrorKind> {
-        let cookie: u32 = self.rng.gen();
-        let data_len = data.len() as u32;
-        let crc_sum = CASTAGNOLI.checksum(&data);
-
-        let ir = IndexRecord::new(cookie, data_len, self.data_cursor, self.meta_cursor);
-        let dr = DataRecord::new(cookie, data_len, crc_sum, data);
-        let mr = MetaRecord::new(self.data_cursor, cookie, data_len, filename.into_bytes());
-        match self.write_index(ir).await {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(e);
-            }
-        }
-        match self.write_data(dr).await {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(e);
-            }
-        }
-        match self.write_meta(mr).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
-    pub async fn close(&mut self) {
-        self._index_writer.close().await.unwrap();
-        self._meta_writer.close().await.unwrap();
-        self._data_writer.close().await.unwrap();
+        Ok(())
     }
 }
 
@@ -449,14 +357,25 @@ impl BytestackHandler {
         }
     }
 
-    pub fn open_reader(&self, path: &str) -> StackReader {
+    pub fn open_reader(&self, path: &str) -> Result<StackReader, ErrorKind> {
         let operator = self.get_operator_by_path(path);
-        let bucket_and_prefix = parse_s3_url(path).unwrap();
-        StackReader::new(operator, bucket_and_prefix.1)
+        let (_, prefix) = match parse_s3_url(path) {
+            Ok(a) => a,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        Ok(StackReader::new(operator, prefix))
     }
-    pub fn open_writer(&self, path: &str) {
+    pub fn open_writer(&self, path: &str) -> Result<StackWriter, ErrorKind> {
         let operator = self.get_operator_by_path(path);
-        let bucket_and_prefix = parse_s3_url(path).unwrap();
+        let (_, prefix) = match parse_s3_url(path) {
+            Ok(a) => a,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        Ok(StackWriter::new(operator, prefix))
     }
     pub fn open_appender(&self, path: &str) {}
 }
@@ -477,13 +396,16 @@ fn init_s3_operator_via_builder(
     op
 }
 
-fn parse_s3_url(path: &str) -> Option<(String, String)> {
+fn parse_s3_url(path: &str) -> Result<(String, String), ErrorKind> {
     let re = regex::Regex::new(r"s3://([^/]+)/(.*)").unwrap();
     if let Some(captures) = re.captures(path) {
         let bucket = captures.get(1).unwrap().as_str();
         let prefix = captures.get(2).unwrap().as_str();
-        Some((bucket.to_string(), prefix.to_string()))
+        Ok((bucket.to_string(), prefix.to_string()))
     } else {
-        panic!("invalid s3 url: {}", path)
+        Err(ErrorKind::ConfigError(CustomError::new(format!(
+            "invalid s3 url: {}",
+            path
+        ))))
     }
 }

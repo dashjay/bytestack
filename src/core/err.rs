@@ -11,6 +11,7 @@ impl CustomError {
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    WriteError(CustomError),
-    ReadError(CustomError)
+    IOError(CustomError),
+    CloseError(CustomError),
+    ConfigError(CustomError),
 }
