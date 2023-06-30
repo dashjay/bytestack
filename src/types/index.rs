@@ -1,6 +1,6 @@
 use super::err::{CustomError, DecodeError};
 use bincode;
-use futures::{AsyncReadExt};
+use futures::AsyncReadExt;
 use opendal::Reader;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -52,6 +52,13 @@ impl IndexRecord {
             offset_data,
             offset_meta,
         }
+    }
+
+    pub fn index_id(self) -> String {
+        let mut temp = Vec::with_capacity(12);
+        temp.extend_from_slice(&self.offset_data.to_le_bytes());
+        temp.extend_from_slice(&self.cookie.to_le_bytes());
+        temp.iter().map(|byte| format!("{:02x}", byte)).collect()
     }
 
     pub fn size() -> usize {

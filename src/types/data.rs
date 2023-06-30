@@ -1,8 +1,8 @@
+use super::err::{CustomError, DecodeError};
 use bincode;
+use futures::AsyncReadExt;
 use opendal::Reader;
 use serde::{Deserialize, Serialize};
-use futures::{AsyncReadExt};
-use super::err::{CustomError, DecodeError};
 
 const ALIGNMENT_SIZE: usize = 4096;
 
@@ -57,6 +57,14 @@ impl DataRecordHeader {
         }
     }
 
+    pub fn cookie(&self) -> u32 {
+        self.cookie
+    }
+
+    pub fn data_size(&self) -> u32 {
+        self.size
+    }
+
     pub fn new_from_bytes(data: &[u8]) -> Result<DataRecordHeader, Box<bincode::ErrorKind>> {
         bincode::deserialize::<DataRecordHeader>(data)
     }
@@ -91,31 +99,25 @@ impl DataRecordHeader {
         }
     }
 
-    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecordHeader, DecodeError>  {
+    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecordHeader, DecodeError> {
         let mut buf = Vec::new();
         buf.resize(DataRecordHeader::size(), 0);
 
-  
-                match r.read_exact(&mut buf).await{
-                    Ok(_) => {
-                        match bincode::deserialize::<DataRecordHeader>(&buf) {
-                            Ok(drh) => {
-                                return Ok(drh);
-                            }
-                            Err(e) => {
-                                return Err(DecodeError::DeserializeError(CustomError::new(
-                                    e.to_string(),
-                                )));
-                            }
-                        }
-                    },
-                    Err(e)=>{
-                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-                    }
+        match r.read_exact(&mut buf).await {
+            Ok(_) => match bincode::deserialize::<DataRecordHeader>(&buf) {
+                Ok(drh) => {
+                    return Ok(drh);
                 }
-      
-        
-        
+                Err(e) => {
+                    return Err(DecodeError::DeserializeError(CustomError::new(
+                        e.to_string(),
+                    )));
+                }
+            },
+            Err(e) => {
+                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
+            }
+        }
     }
     pub fn size() -> usize {
         let a = Self::default();
@@ -243,19 +245,15 @@ impl DataRecord {
                 let padding_size = padding_data_size(data_size_usize) - data_size_usize;
                 let mut padding = Vec::new();
                 padding.resize(padding_size, 0);
-        
+
                 match r.read_exact(&mut data).await {
-                    Ok(_) => {
-                        
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         return Err(DecodeError::IOError(CustomError::new(e.to_string())));
                     }
                 }
                 match r.read_exact(&mut padding).await {
-                    Ok(_) => {
-                       
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         return Err(DecodeError::IOError(CustomError::new(e.to_string())));
                     }
