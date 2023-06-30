@@ -9,6 +9,7 @@ use crc::{Crc, CRC_32_ISCSI};
 use futures::TryStreamExt;
 use opendal::services::S3;
 use opendal::EntryMode;
+use opendal::FutureWriter;
 use opendal::Metakey;
 use opendal::Operator;
 use rand::Rng;
@@ -179,6 +180,35 @@ impl StackReader {
                 "invalid index id".to_string(),
             )))
         }
+    }
+}
+
+pub struct StackWriter {
+    operator: Operator,
+    prefix: String,
+    _current_index_writer: Option<FutureWriter>,
+    _current_meta_writer: Option<FutureWriter>,
+    _current_data_writer: Option<FutureWriter>,
+}
+
+impl StackWriter {
+    pub fn new(operator: Operator, prefix: String) -> Self {
+        StackWriter {
+            operator: operator,
+            prefix: prefix,
+            _current_index_writer: None,
+            _current_meta_writer: None,
+            _current_data_writer: None,
+        }
+    }
+
+    pub async fn put(
+        &self,
+        buf: Vec<u8>,
+        filename: String,
+        meta: Vec<(String, String)>,
+    ) -> Result<String, ErrorKind> {
+        todo!()
     }
 }
 
@@ -424,7 +454,10 @@ impl BytestackHandler {
         let bucket_and_prefix = parse_s3_url(path).unwrap();
         StackReader::new(operator, bucket_and_prefix.1)
     }
-    pub fn open_writer(&self, path: &str) {}
+    pub fn open_writer(&self, path: &str) {
+        let operator = self.get_operator_by_path(path);
+        let bucket_and_prefix = parse_s3_url(path).unwrap();
+    }
     pub fn open_appender(&self, path: &str) {}
 }
 
