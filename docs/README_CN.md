@@ -10,7 +10,7 @@ Bytestack 是存储数十亿小文件的好方法。它基于优秀的开源工�
 ## 谁需要这个
 在一些场景中，比如大型模型AI训练场景，需要这种技术，据我所知，一些AI训练师将他们的文件打包成一个blob，并将它们索引到另一个文件中，没有任何方法来验证文件的正确性，并且“一千个读者，一千个哈姆雷特”，会有许多不同格式的二进制和索引，这并不酷。
 
-In addition to charging for storage capacity, common public clouds also charge more for a large number of write requests, so bundle thousands files into one is a better way which save could services costs.
+除了对存储容量收费外，公共云还对大量的写请求收取更高的费用，因此将数千个文件捆绑成一个文件是节省服务成本的更好方法。
 
 ## 文件结构
 
