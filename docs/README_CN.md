@@ -1,20 +1,20 @@
 # Bytestack
 
-<img src="docs/logo.png" style="width: 60%">
+<img src="logo.png" style="width: 60%">
 
-## Introduction 
-Bytestack is an good way to store billions of small files. With the basis of the excellent open source tool [Opendal](https://github.com/apache/incubator-opendal), we build a cli tool which can help user upload a billions files to the backends like s3, fs or any other blobs.
+## 简介 
+Bytestack 是存储数十亿小文件的好方法。它基于优秀的开源工具Opendal，构建了一系列 cli tools，cache server 等，可以帮助用户将数十亿个文件上传到s3, fs或任何其他blobs等后端。
 
-Inspiration, of course, comes from the excellent papers by facebook: [Finding a needle in Haystack: Facebook’s photo storage](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Beaver.pdf). In short, the meta information of each file is usually fixed size, and a large number of small files means that there will be a large number of meta information, which is a huge cost for any system.
+当然，灵感来自 facebook 的优秀论文: ["大海捞针:facebook的照片存储"](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Beaver.pdf)。总之，每个文件的元信息通常是固定大小的，大量的小文件意味着会有大量的元信息，这对任何系统来说都是巨大的成本。
 
-## Who need this
-In some scenarios, such as large model AI training scenarios, this technology is wanted, as far as I know, some of AI trainer bundle their files into one blob and indexes them into another file, which has not any method of verifying file correctness, and 'To a thousand readers, there are a thousand Hamlets', there will be many different format of binary and indexes which is not cool.
+## 谁需要这个
+在一些场景中，比如大型模型AI训练场景，需要这种技术，据我所知，一些AI训练师将他们的文件打包成一个blob，并将它们索引到另一个文件中，没有任何方法来验证文件的正确性，并且“一千个读者，一千个哈姆雷特”，会有许多不同格式的二进制和索引，这并不酷。
 
 In addition to charging for storage capacity, common public clouds also charge more for a large number of write requests, so bundle thousands files into one is a better way which save could services costs.
 
-## File structure
+## 文件结构
 
-For an index file, we store 16 bytes as a magic header(2 uint64), after that index item line up behind.
+对于索引(idx)文件，我们存储16字节作为一个 Magic 的头(2 uint64)，在索引项后面排列。
 ```
 | magic_number: u64 | stack_id: u64 | (16 bytes)
 | cookie: u32 | offset_data: u64 | size_data: u64 | offset_meta: u64 | size_meta: u32 | (30 bytes)
@@ -23,7 +23,7 @@ For an index file, we store 16 bytes as a magic header(2 uint64), after that ind
 
 ```
 
-For a meta file, we store 17 bytes as a magic header(2 uint64) and a '\n'(10), after that meta items line up behind.
+对于元信息文件(meta)，我们存储17字节作为 Magic 头，分别是(2 uint64) 和 一个 ’\n’(10)，之后元信息项排在后面。
 
 ```
 | magic_number: u64 | stack_id: u64 | '\n': u8 | (17 bytes)
@@ -31,9 +31,9 @@ For a meta file, we store 17 bytes as a magic header(2 uint64) and a '\n'(10), a
 | items ... | (n bytes)
 ```
 
-For a data file, we store 4096 bytes which contains a macic header(2 uint64) and 4080 '0' reserved for other purpose. after that, data items line up behind.
+对于一个数据文件，我们在开始存储 4096 字节，其中包含一个 magic 头，由 (2 uint64) 和保留的4080 个‘0’，之后，数据项排在后面。
 
-Every data item contains data header, data and padding which make header + data padding to 4k.
+每个数据项包含数据头，数据和填充，使头+数据填充到4k。
 
 ```
 | magic_number: u64 | stack_id: u64 | vec![4080; 0] | (4096 bytes)
@@ -41,7 +41,7 @@ Every data item contains data header, data and padding which make header + data 
 | ..... | 
 ```
 
-DATA_HEADER struct is that:
+DATA_HEADER 结构体是:
 
 ```
 | data_magic_record_start: u32 | cookie: u32 | size: u32 | crc: u32 | data_magic_record_end: u32 | (20 bytes)
@@ -55,4 +55,6 @@ DATA_HEADER struct is that:
 bst a tools for operating bytestack(developing)
 ```
 
-## Contribution
+## 贡献
+
+暂无计划

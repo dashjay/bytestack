@@ -5,7 +5,7 @@
 [中文](./docs/README_CN.md)
 
 ## Introduction 
-Bytestack is an good way to store billions of small files. With the basis of the excellent open source tool [Opendal](https://github.com/apache/incubator-opendal), we build a cli tool which can help user upload a billions files to the backends like s3, fs or any other blobs.
+Bytestack is an good way to store billions of small files. With the basis of the excellent open source tool [Opendal](https://github.com/apache/incubator-opendal), we build a cli tool, cache server, etc. which can help user upload a billions files to the backends like s3, fs or any other blobs.
 
 Inspiration, of course, comes from the excellent papers by facebook: [Finding a needle in Haystack: Facebook’s photo storage](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Beaver.pdf). In short, the meta information of each file is usually fixed size, and a large number of small files means that there will be a large number of meta information, which is a huge cost for any system.
 
