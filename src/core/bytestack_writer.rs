@@ -181,7 +181,7 @@ impl StackWriter {
 
         Ok(InnerWriter {
             data_offset: 4096,
-            meta_offset: MetaMagicHeader::size() as u64,
+            meta_offset: MetaMagicHeader::size() as u64 + 1,
             stack_id: stack_id,
             rng: rand::thread_rng(),
             _current_index_writer: index_writer,
