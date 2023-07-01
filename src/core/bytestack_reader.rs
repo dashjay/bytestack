@@ -3,13 +3,12 @@ use crate::types::{
     data::DataRecordHeader,
     index::{IndexMagicHeader, IndexRecord, _INDEX_HEADER_MAGIC},
 };
+use crate::utils;
 use bincode;
 use futures::TryStreamExt;
-
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
-
 use tokio::io::AsyncReadExt;
 
 pub struct StackReader {
@@ -120,54 +119,45 @@ impl StackReader {
     }
 
     pub async fn get_by_index_id(&self, id: String) -> Result<Vec<u8>, ErrorKind> {
-        const INDEX_ID_LENGTH: usize = 12;
-
-        if let Some((stack_id, index_id)) = id.split_once(",") {
-            let data_file_path = format!(
-                "{}{:09x}.data",
-                self.prefix,
-                u64::from_str_radix(stack_id, 10).unwrap()
-            );
-
-            let bytes_index_id: Vec<u8> = index_id
-                .as_bytes()
-                .chunks(2)
-                .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-                .collect();
-            assert_eq!(bytes_index_id.len(), INDEX_ID_LENGTH);
-
-            let data_offset = u64::from_le_bytes(bytes_index_id[..8].try_into().unwrap());
-            let cookie = u32::from_le_bytes(bytes_index_id[8..].try_into().unwrap());
-
-            let mut dat = self
-                .operator
-                .range_read(&data_file_path, data_offset..data_offset + 4096)
-                .await
-                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
-
-            let drh = bincode::deserialize::<DataRecordHeader>(&dat[..DataRecordHeader::size()])
-                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
-
-            assert_eq!(drh.cookie(), cookie);
-            if drh.data_size() < 4096 - (DataRecordHeader::size() as u32) {
-                dat.drain(0..DataRecordHeader::size());
-                return Ok(dat);
+        let index_id = match utils::parse_stack_id(&id) {
+            Some(index_id) => index_id,
+            None => {
+                return Err(ErrorKind::InvalidArgument(CustomError::new(format!(
+                    "invalid index_id {}",id
+                ))))
             }
+        };
 
-            let dat_after_first_4096 = self
-                .operator
-                .range_read(
-                    &data_file_path,
-                    data_offset + 4096..data_offset + drh.data_size() as u64 - 4096,
-                )
-                .await
-                .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
-            dat.extend_from_slice(&dat_after_first_4096);
-            Ok(dat)
-        } else {
-            Err(ErrorKind::IOError(CustomError::new(
-                "invalid index id".to_string(),
-            )))
+        let data_file_path = utils::get_data_file_path(&self.prefix, index_id.stack_id());
+
+        let mut dat = self
+            .operator
+            .range_read(
+                &data_file_path,
+                index_id.file_offset()..index_id.file_offset() + 4096,
+            )
+            .await
+            .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
+
+        let drh = bincode::deserialize::<DataRecordHeader>(&dat[..DataRecordHeader::size()])
+            .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
+
+        assert_eq!(drh.cookie(), index_id.cookie());
+        if drh.data_size() < 4096 - (DataRecordHeader::size() as u32) {
+            dat.drain(0..DataRecordHeader::size());
+            return Ok(dat);
         }
+
+        let dat_after_first_4096 = self
+            .operator
+            .range_read(
+                &data_file_path,
+                index_id.file_offset() + 4096
+                    ..index_id.file_offset() + drh.data_size() as u64 - 4096,
+            )
+            .await
+            .map_err(|e| ErrorKind::IOError(CustomError::new(e.to_string())))?;
+        dat.extend_from_slice(&dat_after_first_4096);
+        Ok(dat)
     }
 }

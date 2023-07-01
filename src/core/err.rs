@@ -14,4 +14,5 @@ pub enum ErrorKind {
     IOError(CustomError),
     CloseError(CustomError),
     ConfigError(CustomError),
+    InvalidArgument(CustomError),
 }
