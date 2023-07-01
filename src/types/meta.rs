@@ -73,9 +73,8 @@ impl MetaRecord {
         return bincode::deserialize::<MetaRecord>(data);
     }
 
-    pub fn size() -> usize {
-        let a = MetaRecord::default();
-        bincode::serialized_size(&a).unwrap() as usize
+    pub fn size(&self) -> usize {
+        serde_json::to_vec(&self).unwrap().len() + 1
     }
 
     pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<MetaRecord, DecodeError> {
@@ -90,8 +89,7 @@ impl MetaRecord {
     }
     pub async fn new_from_future_reader(r: &mut Reader) -> Result<MetaRecord, DecodeError> {
         let mut buf = Vec::new();
-        buf.resize(MetaRecord::size(), 0);
-        match r.read_exact(&mut buf).await {
+        match r.read(&mut buf).await {
             Ok(_) => match bincode::deserialize(&buf) {
                 Ok(rc) => return Ok(rc),
                 Err(e) => {

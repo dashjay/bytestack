@@ -30,27 +30,35 @@ impl IndexMagicHeader {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct IndexRecord {
     cookie: u32,
-    size: u32,
     offset_data: u64,
+    size_data: u32,
     offset_meta: u64,
+    size_meta: u32,
 }
 
 impl PartialEq<IndexRecord> for IndexRecord {
     fn eq(&self, other: &IndexRecord) -> bool {
         self.cookie == other.cookie
-            && self.size == other.size
+            && self.size_data == other.size_data
             && self.offset_data == other.offset_data
             && self.offset_meta == other.offset_meta
     }
 }
 
 impl IndexRecord {
-    pub fn new(cookie: u32, size: u32, offset_data: u64, offset_meta: u64) -> Self {
+    pub fn new(
+        cookie: u32,
+        offset_data: u64,
+        size_data: u32,
+        offset_meta: u64,
+        size_meta: u32,
+    ) -> Self {
         IndexRecord {
             cookie,
-            size,
+            size_data,
             offset_data,
             offset_meta,
+            size_meta,
         }
     }
 
@@ -110,7 +118,7 @@ impl IndexRecord {
 #[test]
 fn test_index_encode_and_decode() {
     use std::io::{Cursor, Write};
-    let ir = IndexRecord::new(1, 2, 3, 4);
+    let ir = IndexRecord::new(1, 2, 3, 4, 5);
     let mut buffer = Cursor::new(Vec::new());
     let header_bytes = bincode::serialize(&ir).unwrap();
     let mut write_once = |input: &[u8]| match buffer.write(input) {
