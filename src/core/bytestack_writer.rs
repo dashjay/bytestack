@@ -2,12 +2,13 @@ use super::err::{CustomError, ErrorKind};
 use crate::types::{
     data::{DataMagicHeader, DataRecord},
     index::{IndexMagicHeader, IndexRecord},
-    meta::{MetaMagicHeader, MetaRecord},
+    meta::{MetaMagicHeader, MetaRecord}, DataRecordHeader,
 };
 use crc::{Crc, CRC_32_ISCSI};
 pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use bincode;
 
+use crate::utils;
 use opendal::Operator;
 use rand::rngs::ThreadRng;
 use rand::Rng;
@@ -140,28 +141,18 @@ impl StackWriter {
     }
 
     async fn create_new_writers(&self, stack_id: u64) -> Result<InnerWriter, ErrorKind> {
-        let prefix = format!("{}{:09x}", self.prefix, stack_id);
-        let mut index_writer = match self
-            .operator
-            .writer_with(format!("{}.idx", prefix).as_str())
-            .await
-        {
+        let index_file_path = utils::get_index_file_path(&self.prefix, stack_id);
+        let mut index_writer = match self.operator.writer_with(&index_file_path).await {
             Ok(writer) => writer,
             Err(e) => return Err(ErrorKind::IOError(CustomError::new(e.to_string()))),
         };
-        let mut meta_writer = match self
-            .operator
-            .writer_with(format!("{}.meta", prefix).as_str())
-            .await
-        {
+        let meta_file_path = utils::get_meta_file_path(&self.prefix, stack_id);
+        let mut meta_writer = match self.operator.writer_with(&meta_file_path).await {
             Ok(writer) => writer,
             Err(e) => return Err(ErrorKind::IOError(CustomError::new(e.to_string()))),
         };
-        let mut data_writer = match self
-            .operator
-            .writer_with(format!("{}.data", prefix).as_str())
-            .await
-        {
+        let data_file_path = utils::get_data_file_path(&self.prefix, stack_id);
+        let mut data_writer = match self.operator.writer_with(&data_file_path).await {
             Ok(writer) => writer,
             Err(e) => return Err(ErrorKind::IOError(CustomError::new(e.to_string()))),
         };
@@ -172,7 +163,8 @@ impl StackWriter {
         let ih_bytes = bincode::serialize(&ih).unwrap();
         let mut mh_bytes = serde_json::to_vec(&mh).unwrap();
         mh_bytes.push(b'\n');
-        let dh_bytes = bincode::serialize(&dh).unwrap();
+        let mut dh_bytes = bincode::serialize(&dh).unwrap();
+        dh_bytes.resize(4096, 0);
 
         match index_writer.write(ih_bytes).await {
             Ok(_) => {}
@@ -188,8 +180,8 @@ impl StackWriter {
         }
 
         Ok(InnerWriter {
-            data_offset: 0,
-            meta_offset: 0,
+            data_offset: 4096,
+            meta_offset: MetaMagicHeader::size() as u64,
             stack_id: stack_id,
             rng: rand::thread_rng(),
             _current_index_writer: index_writer,
@@ -224,7 +216,6 @@ impl StackWriter {
     pub async fn close(&self) -> Result<(), ErrorKind> {
         if let Ok(mut mu) = self.inner_writer.lock() {
             if let Some(writer) = mu.take() {
-                println!("try close writer");
                 writer.close().await?
             }
         }

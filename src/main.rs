@@ -13,9 +13,8 @@ async fn main() {
         idx += 1;
     }
     bw.close().await.unwrap();
-    println!("close success");
 
-    let br = handler.open_reader("s3://test/").unwrap();
+    let br = handler.open_reader("s3://test/dadadad.bs/").unwrap();
     let stack_list = br.list_all_stack().await.unwrap();
     for s in &stack_list {
         println!(
@@ -26,8 +25,6 @@ async fn main() {
     for s in &stack_list {
         for id in br.list_stack(s.stack_id).await.unwrap() {
             println!("{}", id);
-            let buf = br.get_by_index_id(id).await.unwrap();
-            println!("data_length: {}", buf.len())
         }
     }
 }

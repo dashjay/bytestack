@@ -28,16 +28,16 @@ impl DataMagicHeader {
     }
 }
 
-const _DATA_RECORD_HEADER_MAGIC_START: u32 = 257758;
-const _DATA_RECORD_HEEADER_MAGIC_END: u32 = 857752;
+pub const _DATA_RECORD_HEADER_MAGIC_START: u32 = 257758;
+pub const _DATA_RECORD_HEADER_MAGIC_END: u32 = 857752;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct DataRecordHeader {
-    data_magic_record_start: u32,
+    pub data_magic_record_start: u32,
     cookie: u32,
     size: u32,
     crc: u32,
-    data_magic_record_end: u32,
+    pub data_magic_record_end: u32,
 }
 
 impl PartialEq<DataRecordHeader> for DataRecordHeader {
@@ -53,7 +53,7 @@ impl DataRecordHeader {
             cookie: cookie,
             size: size,
             crc: crc,
-            data_magic_record_end: _DATA_RECORD_HEEADER_MAGIC_END,
+            data_magic_record_end: _DATA_RECORD_HEADER_MAGIC_END,
         }
     }
 
