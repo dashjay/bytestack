@@ -1,6 +1,6 @@
 #[tokio::main]
 async fn main() {
-    let handler = bytestack::core::bytestack_core::BytestackHandler::new();
+    let handler = bytestack::core::BytestackHandler::new();
     let mut bw = handler.open_writer("s3://test/dadadad.bs/").unwrap();
     let mut idx = 0;
     while idx < 100 {

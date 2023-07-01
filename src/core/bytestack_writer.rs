@@ -1,36 +1,21 @@
 use super::err::{CustomError, ErrorKind};
 use crate::types::{
-    data::{DataMagicHeader, DataRecord, DataRecordHeader, _DATA_HEADER_MAGIC},
-    index::{IndexMagicHeader, IndexRecord, _INDEX_HEADER_MAGIC},
-    meta::{MetaMagicHeader, MetaRecord, _META_HEADER_MAGIC},
+    data::{DataMagicHeader, DataRecord},
+    index::{IndexMagicHeader, IndexRecord},
+    meta::{MetaMagicHeader, MetaRecord},
 };
 use crc::{Crc, CRC_32_ISCSI};
 pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use bincode;
-use futures::TryStreamExt;
-use opendal::services::S3;
-use opendal::EntryMode;
-use opendal::Metakey;
+
 use opendal::Operator;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use serde_json;
-use std::env;
+
 use std::sync::Mutex;
-use tokio::io::AsyncReadExt;
-use url::Url;
 
 use opendal::Writer;
-
-pub struct StackReader {
-    operator: Operator,
-    prefix: String,
-}
-
-pub struct StackIDWithTime {
-    pub stack_id: u64,
-    pub last_modified: chrono::DateTime<chrono::Utc>,
-}
 
 struct InnerWriter {
     data_offset: u64,
