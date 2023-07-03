@@ -1,12 +1,12 @@
 use super::err::{CustomError, ErrorKind};
-use super::StackReader;
-use super::StackWriter;
+use super::BytestackOpendalWriter;
+use super::BytestackOpendalReader;
 use opendal::services::S3;
 use opendal::Operator;
 use std::env;
 use url::Url;
 
-pub struct BytestackHandler;
+pub struct BytestackOpendalHandler;
 
 const _ENV_OSS_ENDPOINT: &str = "OSS_ENDPOINT";
 
@@ -17,9 +17,9 @@ fn get_default_endpoint() -> String {
         String::new()
     }
 }
-impl BytestackHandler {
+impl BytestackOpendalHandler {
     pub fn new() -> Self {
-        BytestackHandler {}
+        BytestackOpendalHandler {}
     }
 
     fn get_operator_by_path(&self, path: &str) -> Operator {
@@ -40,7 +40,7 @@ impl BytestackHandler {
         }
     }
 
-    pub fn open_reader(&self, path: &str) -> Result<StackReader, ErrorKind> {
+    pub fn open_reader(&self, path: &str) -> Result<BytestackOpendalReader, ErrorKind> {
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
             Ok(a) => a,
@@ -48,9 +48,9 @@ impl BytestackHandler {
                 return Err(e);
             }
         };
-        Ok(StackReader::new(operator, prefix))
+        Ok(BytestackOpendalReader::new(operator, prefix))
     }
-    pub fn open_writer(&self, path: &str) -> Result<StackWriter, ErrorKind> {
+    pub fn open_writer(&self, path: &str) -> Result<BytestackOpendalWriter, ErrorKind> {
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
             Ok(a) => a,
@@ -58,7 +58,7 @@ impl BytestackHandler {
                 return Err(e);
             }
         };
-        Ok(StackWriter::new(operator, prefix))
+        Ok(BytestackOpendalWriter::new(operator, prefix))
     }
     // pub fn open_appender(&self, path: &str) {}
 }
@@ -86,7 +86,7 @@ fn parse_s3_url(path: &str) -> Result<(String, String), ErrorKind> {
         let prefix = captures.get(2).unwrap().as_str();
         Ok((bucket.to_string(), prefix.to_string()))
     } else {
-        Err(ErrorKind::ConfigError(CustomError::new(format!(
+        Err(ErrorKind::InvalidArgument(CustomError::new(format!(
             "invalid s3 url: {}",
             path
         ))))

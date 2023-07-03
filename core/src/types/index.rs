@@ -40,11 +40,11 @@ impl IndexMagicHeader {
 /// Every index item will be like this: `| cookie: u32 | offset_data: u64 | size_data: u64 | offset_meta: u64 | size_meta: u32 | (30 bytes)`
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IndexRecord {
-    cookie: u32,
-    offset_data: u64,
-    size_data: u32,
-    offset_meta: u64,
-    size_meta: u32,
+    pub cookie: u32,
+    pub offset_data: u64,
+    pub size_data: u32,
+    pub offset_meta: u64,
+    pub size_meta: u32,
 }
 
 impl PartialEq<IndexRecord> for IndexRecord {

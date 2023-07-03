@@ -3,9 +3,10 @@ categories = ["filesystem"]
 description = "Bytestack CLI"
 keywords = ["storage", "haystack", "s3", "fs"]
 name = "bst"
-
+edition.workspace = true
 version.workspace = true
-
 
 [dependencies]
 futures = "0.3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+bytestack.workspace = true

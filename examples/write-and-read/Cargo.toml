@@ -1,0 +1,12 @@
+[package]
+name = "write-and-read"
+
+edition = "2021"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+bytestack = { path = "../../core", version = "0.1.0" }
