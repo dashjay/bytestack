@@ -6,15 +6,21 @@ use serde::{Deserialize, Serialize};
 
 const ALIGNMENT_SIZE: usize = 4096;
 
-pub const _DATA_HEADER_MAGIC: u64 = 47494638; // respects to GIF file header
+/// _DATA_HEADER_MAGIC is a magic number respects to GIF file header
+pub const _DATA_HEADER_MAGIC: u64 = 47494638;
 
+/// DataMagicHeader will be serialized with bincode and save to file header in every data file, which is used to
+/// identification this is an data file, this struct SHOULD NOT BE MODIFIED!!!
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DataMagicHeader {
+    /// data_magic_number will always be _DATA_HEADER_MAGIC
     pub data_magic_number: u64,
+    /// stack_id is used to identify which meta or index are associated with this file
     pub stack_id: u64,
 }
 
 impl DataMagicHeader {
+    /// new return a DataMagicHeader by stack_id
     pub fn new(stack_id: u64) -> Self {
         DataMagicHeader {
             data_magic_number: _DATA_HEADER_MAGIC,
@@ -22,32 +28,48 @@ impl DataMagicHeader {
         }
     }
 
+    /// size return the size of DataMagicHeader
     pub fn size() -> usize {
-        let a = DataMagicHeader::new(0);
-        bincode::serialized_size(&a).unwrap() as usize
+        16
     }
 }
 
+#[test]
+fn test_data_magic_header_size() {
+    let temp = DataMagicHeader::new(0);
+    assert!(DataMagicHeader::size() == bincode::serialized_size(&temp).unwrap() as usize);
+}
+
+/// _DATA_RECORD_HEADER_MAGIC_START is a magic number used by data_record
 pub const _DATA_RECORD_HEADER_MAGIC_START: u32 = 257758;
+/// _DATA_RECORD_HEADER_MAGIC_END is a magic number used by data_record
 pub const _DATA_RECORD_HEADER_MAGIC_END: u32 = 857752;
 
+/// DataRecordHeader carries cookie, size and crc info of this data record
+/// # Note
+/// Every data item start with this DataRecordHeader like this:
+/// `| data_magic_record_start: u32 | cookie: u32 | size: u32 | crc: u32 | data_magic_record_end: u32 | (20 bytes)`
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct DataRecordHeader {
-    pub data_magic_record_start: u32,
+    /// data_magic_record_start is used to recognize this is data_record_header start, which is always _DATA_RECORD_HEADER_MAGIC_START
+    data_magic_record_start: u32,
     cookie: u32,
     size: u32,
     crc: u32,
-    pub data_magic_record_end: u32,
+    /// data_magic_record_end is used to recognize this is data_record_end start, which is always _DATA_RECORD_HEADER_MAGIC_END
+    data_magic_record_end: u32,
 }
 
 impl PartialEq<DataRecordHeader> for DataRecordHeader {
+    /// eq means only the same cookie, size and crc checksum
     fn eq(&self, other: &DataRecordHeader) -> bool {
         self.cookie == other.cookie && self.size == other.size && self.crc == other.crc
     }
 }
 
 impl DataRecordHeader {
-    pub fn new(cookie: u32, size: u32, crc: u32) -> Self {
+    /// new received cookie, data_size, and crc
+    fn new(cookie: u32, size: u32, crc: u32) -> Self {
         DataRecordHeader {
             data_magic_record_start: _DATA_RECORD_HEADER_MAGIC_START,
             cookie: cookie,
@@ -57,73 +79,40 @@ impl DataRecordHeader {
         }
     }
 
-    pub fn cookie(&self) -> u32 {
+    /// validate_magic check if this data_record has correct magic
+    /// In theory bytestack It is not responsible for data consistency, we
+    /// just provides a simple crc.
+    pub fn validate_magic(&self) -> bool {
+        self.data_magic_record_start == _DATA_RECORD_HEADER_MAGIC_START
+            && self.data_magic_record_end == self.data_magic_record_end
+    }
+
+    // get_cookie get the cookie of this data record header
+    pub fn get_cookie(&self) -> u32 {
         self.cookie
     }
 
-    pub fn data_size(&self) -> u32 {
+    /// get_data_size get the size of this data.
+    pub fn get_data_size(&self) -> u32 {
         self.size
     }
 
     pub fn new_from_bytes(data: &[u8]) -> Result<DataRecordHeader, Box<bincode::ErrorKind>> {
+        assert!(data.len() == Self::size());
         bincode::deserialize::<DataRecordHeader>(data)
     }
 
-    pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<DataRecordHeader, DecodeError> {
-        let mut buf = Vec::new();
-        buf.resize(DataRecordHeader::size(), 0);
-        match r.read(&mut buf) {
-            Ok(n) => {
-                if n != DataRecordHeader::size() {
-                    return Err(DecodeError::ShortRead(CustomError::new(format!(
-                        "{} read mismatch the data_size {}",
-                        n,
-                        DataRecordHeader::size()
-                    ))));
-                }
-
-                match bincode::deserialize::<DataRecordHeader>(&buf) {
-                    Ok(drh) => {
-                        return Ok(drh);
-                    }
-                    Err(e) => {
-                        return Err(DecodeError::DeserializeError(CustomError::new(
-                            e.to_string(),
-                        )));
-                    }
-                }
-            }
-            Err(e) => {
-                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-            }
-        }
-    }
-
-    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecordHeader, DecodeError> {
-        let mut buf = Vec::new();
-        buf.resize(DataRecordHeader::size(), 0);
-
-        match r.read_exact(&mut buf).await {
-            Ok(_) => match bincode::deserialize::<DataRecordHeader>(&buf) {
-                Ok(drh) => {
-                    return Ok(drh);
-                }
-                Err(e) => {
-                    return Err(DecodeError::DeserializeError(CustomError::new(
-                        e.to_string(),
-                    )));
-                }
-            },
-            Err(e) => {
-                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-            }
-        }
-    }
     pub fn size() -> usize {
-        let a = Self::default();
-        bincode::serialized_size::<DataRecordHeader>(&a).unwrap() as usize
+       20
     }
 }
+
+#[test]
+fn test_data_record_header_size() {
+    let temp = DataRecordHeader::new(0,0,0);
+    assert!(bincode::serialized_size::<DataRecordHeader>(&temp).unwrap() as usize == DataRecordHeader::size());
+}
+
 
 #[derive(Debug)]
 pub struct DataRecord {
@@ -187,85 +176,6 @@ impl DataRecord {
                     e.to_string(),
                 )));
             }
-        }
-    }
-
-    pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<DataRecord, DecodeError> {
-        match DataRecordHeader::new_from_reader(r) {
-            Ok(hdr) => {
-                let data_size_usize = hdr.size as usize;
-                let mut data = Vec::new();
-                data.resize(data_size_usize, 0);
-                let padding_size = padding_data_size(data_size_usize) - data_size_usize;
-                let mut padding = Vec::new();
-                padding.resize(padding_size, 0);
-                match r.read(&mut data) {
-                    Ok(n) => {
-                        if n != data_size_usize {
-                            return Err(DecodeError::ShortRead(CustomError::new(format!(
-                                "{} read mismatch the data_size {}",
-                                n, data_size_usize
-                            ))));
-                        }
-                    }
-                    Err(e) => {
-                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-                    }
-                }
-                match r.read(&mut padding) {
-                    Ok(n) => {
-                        if n != padding_size {
-                            return Err(DecodeError::ShortRead(CustomError::new(format!(
-                                "{} read mismatch the data_size {}",
-                                n, padding_size
-                            ))));
-                        }
-                    }
-                    Err(e) => {
-                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-                    }
-                }
-
-                Ok(DataRecord {
-                    header: hdr,
-                    data: data,
-                    padding: padding,
-                })
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn new_from_future_reader(r: &mut Reader) -> Result<DataRecord, DecodeError> {
-        match DataRecordHeader::new_from_future_reader(r).await {
-            Ok(hdr) => {
-                let data_size_usize = hdr.size as usize;
-                let mut data = Vec::new();
-                data.resize(data_size_usize, 0);
-                let padding_size = padding_data_size(data_size_usize) - data_size_usize;
-                let mut padding = Vec::new();
-                padding.resize(padding_size, 0);
-
-                match r.read_exact(&mut data).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-                    }
-                }
-                match r.read_exact(&mut padding).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-                    }
-                }
-
-                Ok(DataRecord {
-                    header: hdr,
-                    data: data,
-                    padding: padding,
-                })
-            }
-            Err(e) => Err(e),
         }
     }
 
