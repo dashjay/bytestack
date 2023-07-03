@@ -19,9 +19,9 @@ In addition to charging for storage capacity, common public clouds also charge m
 For an index file, we store 16 bytes as a magic header(2 uint64), after that index item line up behind.
 ```
 | magic_number: u64 | stack_id: u64 | (16 bytes)
-| cookie: u32 | offset_data: u64 | size_data: u64 | offset_meta: u64 | size_meta: u32 | (30 bytes)
-| anoter index item | (30 bytes)
-| ... | (30 bytes)
+| cookie: u32 | offset_data: u64 | size_data: u32 | offset_meta: u64 | size_meta: u32 | (28 bytes)
+| anoter index item | (28 bytes)
+| ... | (28 bytes)
 
 ```
 

@@ -1,4 +1,4 @@
-pub mod err;
+
 pub mod data;
 pub use data::DataRecordHeader;
 pub use data::DataRecord;

@@ -1,6 +1,4 @@
-use super::err::{CustomError, DecodeError};
-use futures::AsyncReadExt;
-use opendal::Reader;
+
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -76,54 +74,5 @@ impl MetaRecord {
     pub fn size(&self) -> usize {
         serde_json::to_vec(&self).unwrap().len() + 1
     }
-
-    pub fn new_from_reader(r: &mut dyn std::io::Read) -> Result<MetaRecord, DecodeError> {
-        match bincode::deserialize_from(r) {
-            Ok(mr) => return Ok(mr),
-            Err(e) => {
-                return Err(DecodeError::DeserializeError(CustomError::new(
-                    e.to_string(),
-                )));
-            }
-        }
-    }
-    pub async fn new_from_future_reader(r: &mut Reader) -> Result<MetaRecord, DecodeError> {
-        let mut buf = Vec::new();
-        match r.read(&mut buf).await {
-            Ok(_) => match bincode::deserialize(&buf) {
-                Ok(rc) => return Ok(rc),
-                Err(e) => {
-                    return Err(DecodeError::DeserializeError(CustomError::new(
-                        e.to_string(),
-                    )));
-                }
-            },
-            Err(e) => {
-                return Err(DecodeError::IOError(CustomError::new(e.to_string())));
-            }
-        }
-    }
 }
 
-#[test]
-fn test_index_encode_and_decode() {
-    use std::io::{Cursor, Write};
-    let mr = MetaRecord::default();
-    let mut buffer = Cursor::new(Vec::new());
-    let header_bytes = bincode::serialize(&mr).unwrap();
-    let mut write_once = |input: &[u8]| match buffer.write(input) {
-        Ok(n) => {
-            assert!(n == input.len())
-        }
-        Err(err) => {
-            eprintln!("Failed to read header: {}", err);
-            return;
-        }
-    };
-    write_once(&header_bytes);
-
-    buffer.set_position(0);
-    if let Ok(nmr) = MetaRecord::new_from_reader(&mut buffer) {
-        assert!(mr == nmr);
-    }
-}

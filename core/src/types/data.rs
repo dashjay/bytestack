@@ -1,20 +1,17 @@
-use super::err::{CustomError, DecodeError};
 use bincode;
-use futures::AsyncReadExt;
-use opendal::Reader;
 use serde::{Deserialize, Serialize};
 
 const ALIGNMENT_SIZE: usize = 4096;
 
-/// _DATA_HEADER_MAGIC is a magic number respects to GIF file header
-pub const _DATA_HEADER_MAGIC: u64 = 47494638;
+/// _DATA_HEADER_MAGIC is a magic number respects to GIF file header, and identify this is a data file.
+const _DATA_HEADER_MAGIC: u64 = 47494638;
 
 /// DataMagicHeader will be serialized with bincode and save to file header in every data file, which is used to
 /// identification this is an data file, this struct SHOULD NOT BE MODIFIED!!!
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DataMagicHeader {
-    /// data_magic_number will always be _DATA_HEADER_MAGIC
-    pub data_magic_number: u64,
+    /// data_magic_number should always be _DATA_HEADER_MAGIC
+    data_magic_number: u64,
     /// stack_id is used to identify which meta or index are associated with this file
     pub stack_id: u64,
 }
@@ -31,6 +28,11 @@ impl DataMagicHeader {
     /// size return the size of DataMagicHeader
     pub fn size() -> usize {
         16
+    }
+
+    /// valid check if data_magic_number is _DATA_HEADER_MAGIC
+    pub fn valid(&self) -> bool {
+        return self.data_magic_number == _DATA_HEADER_MAGIC;
     }
 }
 
@@ -87,7 +89,7 @@ impl DataRecordHeader {
             && self.data_magic_record_end == self.data_magic_record_end
     }
 
-    // get_cookie get the cookie of this data record header
+    /// get_cookie get the cookie of this data record header
     pub fn get_cookie(&self) -> u32 {
         self.cookie
     }
@@ -97,31 +99,44 @@ impl DataRecordHeader {
         self.size
     }
 
+    /// new_from_bytes help deserialize DataRecordHeader from &[u8]
     pub fn new_from_bytes(data: &[u8]) -> Result<DataRecordHeader, Box<bincode::ErrorKind>> {
         assert!(data.len() == Self::size());
         bincode::deserialize::<DataRecordHeader>(data)
     }
 
+    /// size of DataRecordHeader is 20 now
     pub fn size() -> usize {
-       20
+        20
     }
 }
 
 #[test]
 fn test_data_record_header_size() {
-    let temp = DataRecordHeader::new(0,0,0);
-    assert!(bincode::serialized_size::<DataRecordHeader>(&temp).unwrap() as usize == DataRecordHeader::size());
+    let temp = DataRecordHeader::new(0, 0, 0);
+    assert!(
+        bincode::serialized_size::<DataRecordHeader>(&temp).unwrap() as usize
+            == DataRecordHeader::size()
+    );
 }
 
-
+/// DataRecord is a dummy struct not on disk, records arrange like this:
+/// | header (20 bytes) | data | padding | <- this item padding to 4K
 #[derive(Debug)]
 pub struct DataRecord {
+    /// header is DataRecordHeader, hold some metadata.
     pub header: DataRecordHeader,
+    /// data is the true user data.
     pub data: Vec<u8>,
+    /// padding is all /0
     pub padding: Vec<u8>,
 }
 
-fn padding_data_size(data_size: usize) -> usize {
+/// padding_data_size help to calculate the padding size
+/// | data_record_header | data | padding |
+/// ⬆️ DataRecord start here
+/// (data_record_header(20 Byte) + data + padding) should padding to 4K, so we need to calculate the padding size by data size
+pub fn padding_data_size(data_size: usize) -> usize {
     let data_with_header_size = data_size + DataRecordHeader::size();
     if data_with_header_size % ALIGNMENT_SIZE == 0 {
         return data_size;
@@ -139,6 +154,7 @@ fn test_padding_data_size() {
 }
 
 impl DataRecord {
+    /// new create a DataRecord
     pub fn new(cookie: u32, size: u32, crc: u32, data: Vec<u8>) -> Self {
         let data_size = data.len();
         let padding_size = padding_data_size(data_size) - data_size;
@@ -150,63 +166,12 @@ impl DataRecord {
             padding: zero_padding,
         }
     }
-    pub fn new_from_bytes(data: Vec<u8>) -> Result<DataRecord, DecodeError> {
-        let header = DataRecordHeader::new_from_bytes(&data[..DataRecordHeader::size()]);
-        match header {
-            Ok(hdr) => {
-                let data_size = hdr.size as usize;
-                if data_size > data.len() - DataRecordHeader::size() {
-                    return Err(DecodeError::ShortRead(CustomError::new(format!(
-                        "record data_size {} > input data len {} - header_size",
-                        data_size,
-                        data.len()
-                    ))));
-                }
-                let data_bytes =
-                    &data[DataRecordHeader::size()..data_size + DataRecordHeader::size()];
-                let padding_bytes = &data[data_size + DataRecordHeader::size()..];
-                return Ok(DataRecord {
-                    header: hdr,
-                    data: data_bytes.to_vec(),
-                    padding: padding_bytes.to_vec(),
-                });
-            }
-            Err(e) => {
-                return Err(DecodeError::DeserializeError(CustomError::new(
-                    e.to_string(),
-                )));
-            }
-        }
-    }
 
+    /// size calculate the full data size
+    /// MUST PADDING to 4k.
     pub fn size(&self) -> usize {
-        DataRecordHeader::size() + self.data.len() + self.padding.len()
-    }
-}
-
-#[test]
-fn test_data_encode_and_decode() {
-    use std::io::{Cursor, Write};
-    let dr = DataRecord::new(1234, 4096, 1243, vec![1; 4096]);
-    let mut buffer = Cursor::new(Vec::new());
-    let header_bytes = bincode::serialize(&dr.header).unwrap();
-    let mut write_once = |input: &[u8]| match buffer.write(input) {
-        Ok(n) => {
-            assert!(n == input.len())
-        }
-        Err(err) => {
-            eprintln!("Failed to read header: {}", err);
-            return;
-        }
-    };
-    write_once(&header_bytes);
-    write_once(&dr.data);
-    write_once(&dr.padding);
-
-    buffer.set_position(0);
-    if let Ok(ndr) = DataRecord::new_from_reader(&mut buffer) {
-        assert!(dr.header == ndr.header);
-        assert!(dr.data == ndr.data);
-        assert!(dr.padding == ndr.padding);
+        let size = DataRecordHeader::size() + self.data.len() + self.padding.len();
+        assert!(size % ALIGNMENT_SIZE == 0);
+        size
     }
 }
