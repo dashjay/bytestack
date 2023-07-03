@@ -37,9 +37,7 @@ pub struct StackReaderIter{
     cursor: i32
 }
 
-impl StackReaderIter{
-    
-}
+impl StackReaderIter{}
 
 impl Stream for StackReaderIter{
     type Item = (IndexRecord,DataRecord,MetaRecord);

@@ -43,9 +43,9 @@
 // Deny unused qualifications.
 #![deny(unused_qualifications)]
 
-mod types;
-pub use types::*;
 
 #[cfg(feature = "docs")]
 pub mod docs;
+pub mod types;
 pub mod sdk;
+pub mod utils;

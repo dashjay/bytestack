@@ -1,3 +1,4 @@
+//! index will provide all data struct about index file.
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -8,9 +9,9 @@ const _INDEX_HEADER_MAGIC: u64 = 5201314;
 /// identification this is an index file, this struct SHOULD NOT BE MODIFIED!!!
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IndexMagicHeader {
-    /// data_magic_number should always be _INDEX_HEADER_MAGIC
+    /// index_header_magic should always be _INDEX_HEADER_MAGIC
     index_header_magic: u64,
-    /// stack_id is used to identify which meta or index are associated with this file
+    /// stack_id is used to identify which data or meta are associated with this file
     pub stack_id: u64,
 }
 
@@ -78,14 +79,17 @@ impl IndexRecord {
     /// offset_data(hexString)cookie(hexString)
     /// 420fe000d0b8efae
     pub fn index_id(&self) -> String {
-        format!("{:x}{:8x}", self.offset_data, self.cookie)
+        format!("{:x}{:08x}", self.offset_data, self.cookie)
     }
 
+    /// size return the size of IndexRecord
     pub fn size() -> usize {
         28
     }
 
+    /// new_from_bytes
     pub fn new_from_bytes(data: &[u8]) -> Result<IndexRecord, Box<bincode::ErrorKind>> {
+        assert!(data.len() == Self::size());
         return bincode::deserialize::<IndexRecord>(data);
     }
 }

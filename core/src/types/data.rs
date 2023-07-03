@@ -1,3 +1,4 @@
+//! data will provide all data struct about data file.
 use bincode;
 use serde::{Deserialize, Serialize};
 
