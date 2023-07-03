@@ -1,0 +1,11 @@
+[package]
+categories = ["filesystem"]
+description = "Bytestack CLI"
+keywords = ["storage", "haystack", "s3", "fs"]
+name = "bst"
+
+version.workspace = true
+
+
+[dependencies]
+futures = "0.3"
