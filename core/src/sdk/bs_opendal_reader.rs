@@ -1,7 +1,9 @@
 //! bs_reader provides all tools for reading bytestacks
 
 use super::err::{CustomError, ErrorKind};
-use crate::types::{IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord, Stack};
+use crate::types::{
+    DataRecordHeader, IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord, Stack,
+};
 use crate::utils;
 use futures::AsyncReadExt;
 use futures::TryStreamExt;
@@ -32,20 +34,13 @@ impl BytestackOpendalIterator {
         let ir = self.irs.remove(0);
         let mut buf = Vec::with_capacity(ir.size_meta as usize);
         buf.resize(ir.size_meta as usize, 0);
-        let res = match self.reader.read(&mut buf).await {
-            Ok(n) => {
-                if n == 0 {
-                    return None;
-                }
-                n
-            }
+        match self.reader.read_exact(&mut buf).await {
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("next error {}", e);
                 return None;
             }
         };
-        println!("res={res}, buf={}", buf.len());
-        assert!(res == buf.len());
         let mr = match serde_json::from_slice::<MetaRecord>(&buf) {
             Ok(mr) => mr,
             Err(e) => {
@@ -54,6 +49,70 @@ impl BytestackOpendalIterator {
             }
         };
         Some((ir, mr))
+    }
+}
+
+/// BytestackopendalDataIterator implement next for scan IndexRecord, MetaRecord and DataRecord
+pub struct BytestackopendalDataIterator {
+    irs: Vec<IndexRecord>,
+    meta_reader: Reader,
+    data_reader: Reader,
+}
+
+impl BytestackopendalDataIterator {
+    /// next work like iterator but async version
+    /// return (ir, mr) if there is, and return None if there is not.
+    pub async fn next(&mut self) -> Option<(IndexRecord, MetaRecord, Vec<u8>)> {
+        if self.irs.len() == 0 {
+            return None;
+        }
+        let ir = self.irs.remove(0);
+        let mut buf = Vec::with_capacity(ir.size_meta as usize);
+        buf.resize(ir.size_meta as usize, 0);
+        match self.meta_reader.read_exact(&mut buf).await {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("next error {}", e);
+                return None;
+            }
+        };
+        let mr = match serde_json::from_slice::<MetaRecord>(&buf) {
+            Ok(mr) => mr,
+            Err(e) => {
+                eprintln!("deserialize error {}", e);
+                return None;
+            }
+        };
+
+        let mut data_buf = Vec::new();
+        data_buf.resize(
+            DataRecordHeader::size() + crate::types::data::padding_data_size(ir.size_data as usize),
+            0,
+        );
+        match self.data_reader.read_exact(&mut data_buf).await {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("next error {}", e);
+                return None;
+            }
+        }
+        let drh = match DataRecordHeader::new_from_bytes(&data_buf[..DataRecordHeader::size()]) {
+            Ok(drh) => {
+                println!("{:?}", drh);
+                drh
+            }
+            Err(e) => {
+                eprintln!("deserialize error {}", e);
+                return None;
+            }
+        };
+        if !drh.validate_magic() {
+            // TODO: verify but not panic, just for test now
+            panic!("drh magic error")
+        }
+        data_buf.drain(..DataRecordHeader::size());
+        data_buf.drain(ir.size_data as usize..);
+        Some((ir, mr, data_buf))
     }
 }
 
@@ -68,6 +127,7 @@ impl OpendalFetcher {
 }
 
 impl BytestackOpendalReader {
+    /// new create BytestackOpendalReader
     pub fn new(operator: Operator, prefix: String) -> Self {
         Self {
             operator: operator,
@@ -267,13 +327,161 @@ impl BytestackOpendalReader {
         Ok(BytestackOpendalIterator { irs, reader })
     }
 
-    /// fetch data by index_id
-    pub async fn fetch(
+    /// list_stack_al_with_data_iter return BytestackOpendalDataIterator which work like an iterator for IndexRecord, MetaRecord and data
+    pub async fn list_stack_al_with_data_iter(
         &self,
-        index_id: String,
-        check_crc: bool,
-    ) -> Result<Vec<u8>, opendal::Error> {
-        todo!()
+        stack_id: u64,
+    ) -> Result<BytestackopendalDataIterator, ErrorKind> {
+        let mut irs = Vec::<IndexRecord>::new();
+        let index_file_path = utils::get_index_file_path(&self.prefix, stack_id);
+        let imh = match self
+            .operator
+            .reader_with(index_file_path.as_str())
+            .range(0..IndexMagicHeader::size() as u64)
+            .await
+        {
+            Ok(mut reader) => {
+                let mut buf = Vec::new();
+                buf.resize(IndexMagicHeader::size(), 0);
+                match reader.read(&mut buf).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+                    }
+                }
+                let deserialized = match bincode::deserialize::<IndexMagicHeader>(&buf) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+                    }
+                };
+                assert!(deserialized.valid());
+                deserialized
+            }
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+
+        assert_eq!(imh.valid(), true, "header magic mismatch");
+        assert!(imh.stack_id == stack_id, "stack_id mismatch");
+
+        let bs = match self
+            .operator
+            .range_read(&index_file_path, IndexMagicHeader::size() as u64..)
+            .await
+        {
+            Ok(bs) => bs,
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+        for chunk in bs.chunks(IndexRecord::size()) {
+            let ir = match bincode::deserialize::<IndexRecord>(chunk) {
+                Ok(ir) => ir,
+                Err(e) => {
+                    return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+                }
+            };
+            irs.push(ir);
+        }
+        let meta_file_path = utils::get_meta_file_path(&self.prefix, stack_id);
+        let mgh = MetaMagicHeader::new(stack_id);
+        let meta_reader = match self
+            .operator
+            .reader_with(&meta_file_path)
+            .range(mgh.size() as u64..)
+            .await
+        {
+            Ok(reader) => reader,
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+
+        let data_file_path = utils::get_data_file_path(&self.prefix, stack_id);
+        let data_reader = match self
+            .operator
+            .reader_with(&data_file_path)
+            .range(4096..)
+            .await
+        {
+            Ok(reader) => reader,
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+
+        Ok(BytestackopendalDataIterator {
+            irs,
+            meta_reader,
+            data_reader,
+        })
+    }
+    /// fetch data by index_id
+    pub async fn fetch(&self, index_id: String, check_crc: bool) -> Result<Vec<u8>, ErrorKind> {
+        let pasred_index_id = match utils::parse_index_id(&index_id) {
+            Some(id) => id,
+            None => {
+                return Err(ErrorKind::IOError(CustomError::new(format!(
+                    "invalid index_id: {}",
+                    index_id
+                ))));
+            }
+        };
+        let data_file_path = utils::get_data_file_path(&self.prefix, pasred_index_id.stack_id);
+        let mut reader = match self
+            .operator
+            .reader_with(&data_file_path)
+            .range(pasred_index_id.offset_data..)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+        let mut head_buf = Vec::new();
+        head_buf.resize(DataRecordHeader::size(), 0);
+        match reader.read_exact(&mut head_buf).await {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        }
+        let drh = match DataRecordHeader::new_from_bytes(&head_buf) {
+            Ok(drh) => drh,
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        };
+        if !drh.validate_magic() {
+            return Err(ErrorKind::IOError(CustomError::new(String::from(
+                "invalid drh item",
+            ))));
+        }
+        if drh.cookie != pasred_index_id.cookie {
+            return Err(ErrorKind::InvalidArgument(CustomError::new(String::from(
+                "cookie mismatched",
+            ))));
+        }
+        let mut data_buf = Vec::new();
+        data_buf.resize(drh.size as usize, 0);
+        match reader.read_exact(&mut data_buf).await {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+            }
+        }
+        if check_crc {
+            let crc_sum = utils::CASTAGNOLI.checksum(&data_buf);
+            if crc_sum != drh.crc {
+                return Err(ErrorKind::IOError(CustomError::new(String::from(
+                    "crc mismatch",
+                ))));
+            }
+        }
+        Ok(data_buf)
     }
 
     /// batch_fetch can fetch data for giving a batch of index_id

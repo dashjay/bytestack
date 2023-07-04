@@ -1,6 +1,6 @@
 #[tokio::main]
 async fn main() {
-    let handler = bytestack::sdk::BytestackOpendalHandler::new();
+    let handler = bytestack::sdk::Handler::new();
     let mut bw = handler.open_writer("s3://test/dadadad.bs/").unwrap();
     let mut idx = 0;
     while idx < 100 {
@@ -24,8 +24,25 @@ async fn main() {
     }
     for s in &stack_list {
         let mut iter = br.list_stack_al_iter(s.stack_id).await.unwrap();
-        while let Some((ir, mr)) = iter.next().await {
-            println!("index_id: {}, meta: {:?}", ir.index_id(), mr)
+        while let Some((ir, _mr)) = iter.next().await {
+            let data = match br
+                .fetch(format!("{},{}", s.stack_id, ir.index_id()), true)
+                .await
+            {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("fetch data error: {:?}", e);
+                    return;
+                }
+            };
+            println!("{}", data.get(0).unwrap())
+        }
+    }
+
+    for s in &stack_list {
+        let mut iter = br.list_stack_al_with_data_iter(s.stack_id).await.unwrap();
+        while let Some((ir, mr, data)) = iter.next().await {
+            println!("{:?}, {:?}, data_len: {}",ir,mr,data.len())
         }
     }
 }

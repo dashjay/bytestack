@@ -6,6 +6,6 @@ pub mod bs_opendal_writer;
 pub use bs_opendal_writer::BytestackOpendalWriter;
 
 pub mod bs_opendal;
-pub use bs_opendal::BytestackOpendalHandler;
+pub use bs_opendal::BytestackOpendalHandler as Handler;
 
 pub mod err;

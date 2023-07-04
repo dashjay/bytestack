@@ -40,10 +40,15 @@ impl IndexMagicHeader {
 /// Every index item will be like this: `| cookie: u32 | offset_data: u64 | size_data: u64 | offset_meta: u64 | size_meta: u32 | (30 bytes)`
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IndexRecord {
+    /// cookie is a random u32 that forbid user to guess the offset, duplicate in DataRecordHeader
     pub cookie: u32,
+    /// offset_data is offset of corresponding data in data file
     pub offset_data: u64,
+    /// size_data is size of corresponding data in data file 
     pub size_data: u32,
+    /// offset_meta is offset of corresponding meta in meta file
     pub offset_meta: u64,
+    /// size_meta is size of corresponding meta in meta file
     pub size_meta: u32,
 }
 

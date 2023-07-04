@@ -56,9 +56,12 @@ pub const _DATA_RECORD_HEADER_MAGIC_END: u32 = 857752;
 pub struct DataRecordHeader {
     /// data_magic_record_start is used to recognize this is data_record_header start, which is always _DATA_RECORD_HEADER_MAGIC_START
     data_magic_record_start: u32,
-    cookie: u32,
-    size: u32,
-    crc: u32,
+    /// cookie is a random u32 that forbid user to guess the offset.
+    pub cookie: u32,
+    /// size of data
+    pub size: u32,
+    /// crc of data
+    pub crc: u32,
     /// data_magic_record_end is used to recognize this is data_record_end start, which is always _DATA_RECORD_HEADER_MAGIC_END
     data_magic_record_end: u32,
 }
@@ -88,16 +91,6 @@ impl DataRecordHeader {
     pub fn validate_magic(&self) -> bool {
         self.data_magic_record_start == _DATA_RECORD_HEADER_MAGIC_START
             && self.data_magic_record_end == self.data_magic_record_end
-    }
-
-    /// get_cookie get the cookie of this data record header
-    pub fn get_cookie(&self) -> u32 {
-        self.cookie
-    }
-
-    /// get_data_size get the size of this data.
-    pub fn get_data_size(&self) -> u32 {
-        self.size
     }
 
     /// new_from_bytes help deserialize DataRecordHeader from &[u8]

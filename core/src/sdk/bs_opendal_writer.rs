@@ -2,13 +2,8 @@
 
 use super::err::{CustomError, ErrorKind};
 use crate::types::{
-    data::{DataMagicHeader, DataRecord},
-    index::{IndexMagicHeader, IndexRecord},
-    meta::{MetaMagicHeader, MetaRecord},
-    DataRecordHeader,
+    DataMagicHeader, DataRecord, IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord,
 };
-use crc::{Crc, CRC_32_ISCSI};
-pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use bincode;
 
 use crate::utils;
@@ -93,7 +88,7 @@ impl InnerWriter {
             Some(meta) => meta,
             None => Vec::new(),
         };
-        let crc_sum = CASTAGNOLI.checksum(&buf);
+        let crc_sum = utils::CASTAGNOLI.checksum(&buf);
         let cookie: u32 = self.rng.gen();
 
         let mr = MetaRecord::new(

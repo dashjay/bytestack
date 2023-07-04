@@ -1,3 +1,4 @@
+//! simple time utils provides
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// current_time return the unix_timestamp by now.

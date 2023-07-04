@@ -1,3 +1,4 @@
+//! utils provides utils for global use
 pub mod path;
 pub use path::*;
 
@@ -6,3 +7,6 @@ pub use index_id::*;
 
 pub mod time;
 pub use time::*;
+
+pub mod crc;
+pub use self::crc::CASTAGNOLI;

@@ -10,6 +10,8 @@ impl CustomError {
     }
 }
 
+/// ErrorKind defined some simple error type.
+/// TODO(dashjay): Makes the error more specific
 #[derive(Debug)]
 pub enum ErrorKind {
     IOError(CustomError),

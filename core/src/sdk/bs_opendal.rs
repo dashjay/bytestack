@@ -18,6 +18,7 @@ fn get_default_endpoint() -> String {
     }
 }
 impl BytestackOpendalHandler {
+    /// new BytestackOpendalHandler
     pub fn new() -> Self {
         BytestackOpendalHandler {}
     }
@@ -40,6 +41,7 @@ impl BytestackOpendalHandler {
         }
     }
 
+    /// open_reader return BytestackOpendalReader for giving path
     pub fn open_reader(&self, path: &str) -> Result<BytestackOpendalReader, ErrorKind> {
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
@@ -50,6 +52,8 @@ impl BytestackOpendalHandler {
         };
         Ok(BytestackOpendalReader::new(operator, prefix))
     }
+
+    /// open_writer return BytestackOpendalWriter for giving path
     pub fn open_writer(&self, path: &str) -> Result<BytestackOpendalWriter, ErrorKind> {
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
