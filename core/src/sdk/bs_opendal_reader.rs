@@ -97,10 +97,7 @@ impl BytestackopendalDataIterator {
             }
         }
         let drh = match DataRecordHeader::new_from_bytes(&data_buf[..DataRecordHeader::size()]) {
-            Ok(drh) => {
-                println!("{:?}", drh);
-                drh
-            }
+            Ok(drh) => drh,
             Err(e) => {
                 eprintln!("deserialize error {}", e);
                 return None;

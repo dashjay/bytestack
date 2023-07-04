@@ -1,38 +1,34 @@
 use super::err::{CustomError, ErrorKind};
-use super::BytestackOpendalWriter;
 use super::BytestackOpendalReader;
+use super::BytestackOpendalWriter;
+use super::Config;
 use opendal::services::S3;
 use opendal::Operator;
 use std::env;
 use url::Url;
 
-pub struct BytestackOpendalHandler;
-
-const _ENV_OSS_ENDPOINT: &str = "OSS_ENDPOINT";
-
-fn get_default_endpoint() -> String {
-    if let Ok(path_value) = env::var(_ENV_OSS_ENDPOINT) {
-        path_value
-    } else {
-        String::new()
-    }
+/// BytestackOpendalHandler is entrance of sdk
+pub struct BytestackOpendalHandler {
+    cfg: Config,
 }
+
 impl BytestackOpendalHandler {
     /// new BytestackOpendalHandler
-    pub fn new() -> Self {
-        BytestackOpendalHandler {}
+    pub fn new(cfg: Config) -> Self {
+        BytestackOpendalHandler { cfg }
     }
 
     fn get_operator_by_path(&self, path: &str) -> Operator {
         let url = Url::parse(path).expect(format!("Failed to parse URL {}", path).as_str());
         match url.scheme() {
             "s3" => {
-                let res = parse_s3_url(path).unwrap();
+                let (bucket, _) = parse_s3_url(path).unwrap();
                 return init_s3_operator_via_builder(
-                    res.0.as_str(),
-                    "default",
-                    "minioadmin",
-                    "minioadmin",
+                    &bucket,
+                    &self.cfg.s3.region,
+                    &self.cfg.s3.aws_access_key_id,
+                    &self.cfg.s3.aws_secret_access_key,
+                    &self.cfg.s3.endpoint,
                 );
             }
             _ => {
@@ -72,13 +68,15 @@ fn init_s3_operator_via_builder(
     region: &str,
     accesskey: &str,
     secretkey: &str,
+    endpoint: &str,
 ) -> Operator {
     let mut builder = S3::default();
-    builder.endpoint(get_default_endpoint().as_str());
-    builder.bucket(bucket);
-    builder.region(region);
-    builder.access_key_id(accesskey);
-    builder.secret_access_key(secretkey);
+    builder
+        .endpoint(endpoint)
+        .bucket(bucket)
+        .region(region)
+        .access_key_id(accesskey)
+        .secret_access_key(secretkey);
     let op = Operator::new(builder).unwrap().finish();
     op
 }
