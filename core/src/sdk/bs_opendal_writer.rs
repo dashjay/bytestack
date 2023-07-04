@@ -1,11 +1,9 @@
+//! bs_writer provides all tools for writing bytestacks
+
 use super::err::{CustomError, ErrorKind};
 use crate::types::{
-    data::{DataMagicHeader, DataRecord},
-    index::{IndexMagicHeader, IndexRecord},
-    meta::{MetaMagicHeader, MetaRecord}, DataRecordHeader,
+    DataMagicHeader, DataRecord, IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord,
 };
-use crc::{Crc, CRC_32_ISCSI};
-pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 use bincode;
 
 use crate::utils;
@@ -18,6 +16,10 @@ use std::sync::Mutex;
 
 use opendal::Writer;
 
+const _MAX_DATA_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+
+/// InnnerWriter is the real one who write data.
+/// User may write data all the timem but we divided billions of data by every 10GB
 struct InnerWriter {
     data_offset: u64,
     meta_offset: u64,
@@ -86,10 +88,17 @@ impl InnerWriter {
             Some(meta) => meta,
             None => Vec::new(),
         };
-        let crc_sum = CASTAGNOLI.checksum(&buf);
+        let crc_sum = utils::CASTAGNOLI.checksum(&buf);
         let cookie: u32 = self.rng.gen();
 
-        let mr = MetaRecord::new(self.data_offset, cookie, buf.len() as u32, filename, meta);
+        let mr = MetaRecord::new(
+            utils::current_time(),
+            self.data_offset,
+            cookie,
+            buf.len() as u32,
+            filename,
+            meta,
+        );
         let mr_size = mr.size();
         let ir = IndexRecord::new(
             cookie,
@@ -123,21 +132,45 @@ impl InnerWriter {
     }
 }
 
-pub struct StackWriter {
+/// BytestackOpendalWriter is tool for writing the bytestack
+pub struct BytestackOpendalWriter {
     id: u64,
     operator: Operator,
     prefix: String,
     inner_writer: Mutex<Option<InnerWriter>>,
 }
 
-impl StackWriter {
+impl BytestackOpendalWriter {
     pub fn new(operator: Operator, prefix: String) -> Self {
-        StackWriter {
+        BytestackOpendalWriter {
             id: 1,
             operator: operator,
             prefix: prefix,
             inner_writer: Mutex::<Option<InnerWriter>>::new(None),
         }
+    }
+    /// put puts data, filename and meta_info to server.
+    pub async fn put(
+        &mut self,
+        buf: Vec<u8>,
+        filename: String,
+        meta: Option<Vec<u8>>,
+    ) -> Result<String, ErrorKind> {
+        let mut inner_writer = self.inner_writer.lock().unwrap();
+        let mut writer = match inner_writer.take() {
+            Some(writer) => writer,
+            None => {
+                let inner_new_writer = self.create_new_writers(self.id).await.unwrap();
+                self.id += 1;
+                inner_new_writer
+            }
+        };
+        let id = match writer.write(buf, filename, meta).await {
+            Ok(id) => id,
+            Err(e) => return Err(e),
+        };
+        inner_writer.replace(writer);
+        Ok(id)
     }
 
     async fn create_new_writers(&self, stack_id: u64) -> Result<InnerWriter, ErrorKind> {
@@ -163,6 +196,7 @@ impl StackWriter {
         let ih_bytes = bincode::serialize(&ih).unwrap();
         let mut mh_bytes = serde_json::to_vec(&mh).unwrap();
         mh_bytes.push(b'\n');
+        let mh_bytes_length = mh_bytes.len();
         let mut dh_bytes = bincode::serialize(&dh).unwrap();
         dh_bytes.resize(4096, 0);
 
@@ -181,7 +215,7 @@ impl StackWriter {
 
         Ok(InnerWriter {
             data_offset: 4096,
-            meta_offset: MetaMagicHeader::size() as u64 + 1,
+            meta_offset: mh_bytes_length as u64,
             stack_id: stack_id,
             rng: rand::thread_rng(),
             _current_index_writer: index_writer,
@@ -189,30 +223,7 @@ impl StackWriter {
             _current_data_writer: data_writer,
         })
     }
-
-    pub async fn put(
-        &mut self,
-        buf: Vec<u8>,
-        filename: String,
-        meta: Option<Vec<u8>>,
-    ) -> Result<String, ErrorKind> {
-        let mut inner_writer = self.inner_writer.lock().unwrap();
-        let mut writer = match inner_writer.take() {
-            Some(writer) => writer,
-            None => {
-                let inner_new_writer = self.create_new_writers(self.id).await.unwrap();
-                self.id += 1;
-                inner_new_writer
-            }
-        };
-        let id = match writer.write(buf, filename, meta).await {
-            Ok(id) => id,
-            Err(e) => return Err(e),
-        };
-        inner_writer.replace(writer);
-        Ok(id)
-    }
-
+    /// close flush and close all writer.
     pub async fn close(&self) -> Result<(), ErrorKind> {
         if let Ok(mut mu) = self.inner_writer.lock() {
             if let Some(writer) = mu.take() {

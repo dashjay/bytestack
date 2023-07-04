@@ -1,18 +1,22 @@
-[package]
-name = "bytestack"
-version = "0.1.0"
-edition = "2021"
+[profile.bench]
+debug = true
 
-[dependencies]
-bytes = "1.4.0"
-rand = "0.8"
-crc = "3.0.1"
-serde = { version = "1.0", features = ["derive"] }
-bincode = "1.3.3"
-futures = "0.3"
-opendal = "0.37"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-url = "2.4.0"
-regex = "1.8.4"
-chrono = "0.4.26"
-serde_json = "1.0.99"
+[workspace]
+default-members = ["core"]
+version = "0.1.0"
+exclude = ["examples"]
+members = [
+  "core",
+  "bin/bst"
+]
+resolver = "1"
+
+[workspace.package]
+authors = ["dashjwz@gmail.com"]
+edition = "2021"
+repository = "https://github.com/dashjay/bytestack"
+rust-version = "1.65"
+version = "0.1.0"
+
+[workspace.dependencies]
+bytestack = { version = "0.1.0", path = "core" }
