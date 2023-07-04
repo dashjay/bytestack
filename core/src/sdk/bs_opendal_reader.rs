@@ -174,11 +174,21 @@ impl BytestackOpendalReader {
                     if de.name().ends_with(".idx") {
                         let stack_id_str = de.name().strip_suffix(".idx").unwrap();
                         let stack_id_u64 = u64::from_str_radix(stack_id_str, 10).unwrap();
-                        // TODO: (full_size should be calculate by read all idx)
+                        let full_size = match self.list_stack(stack_id_u64).await {
+                            Ok(irs) => {
+                                let mut sum = 0;
+                                irs.iter().for_each(|ir| sum += ir.size_data);
+                                sum as u64
+                            }
+                            Err(e) => {
+                                eprintln!("cal stack {} size error: {:?}", stack_id_u64, e);
+                                continue;
+                            }
+                        };
                         out.push(Stack {
                             stack_id: stack_id_u64,
                             last_modified: meta.last_modified().unwrap(),
-                            full_size: 0,
+                            full_size,
                         });
                     }
                 }
@@ -193,8 +203,8 @@ impl BytestackOpendalReader {
 
     /// list_stack return all record(index_id) in giving stack_id.
     /// return with list of format!({:x}{:08x}, data_offset, cookie) which can be used to fetch single or batch data.
-    pub async fn list_stack(&self, stack_id: u64) -> Result<Vec<String>, ErrorKind> {
-        let mut out = Vec::<String>::new();
+    pub async fn list_stack(&self, stack_id: u64) -> Result<Vec<IndexRecord>, ErrorKind> {
+        let mut out = Vec::<IndexRecord>::new();
         let index_file_path = utils::get_index_file_path(&self.prefix, stack_id);
         let imh = match self
             .operator
@@ -244,7 +254,7 @@ impl BytestackOpendalReader {
                     return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
                 }
             };
-            out.push(format!("{},{}", stack_id, ir.index_id()))
+            out.push(ir)
         }
         Ok(out)
     }

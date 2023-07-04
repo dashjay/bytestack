@@ -13,3 +13,4 @@ bytestack.workspace = true
 clap = { version = "4.3.10", features = ["derive"] }
 log = "0.4.19"
 toml = "0.7.5"
+tabled = "0.12.2"

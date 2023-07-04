@@ -1,11 +1,12 @@
 use clap::{Parser, Subcommand};
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::{env, process::exit};
+use tabled::Table;
 
-use log::{info, warn};
+use log::{error, info, warn};
 
 const DEFAULT_CONFIG_PATH_TEMPLATE: &str = "($HOME|%USERPROFILE%)/.config/bytestack/config.toml";
 const DEFAULT_CONFIG_PATH: &str = ".config/bytestack/config.toml";
@@ -80,7 +81,7 @@ async fn main() {
     let content = match &cli.config_path {
         Some(path) => {
             let path = {
-                if path == DEFAULT_CONFIG_PATH_TEMPLATE{
+                if path == DEFAULT_CONFIG_PATH_TEMPLATE {
                     let home_dir = match env::var("HOME") {
                         Ok(dir) => dir,
                         Err(_) => match env::var("USERPROFILE") {
@@ -91,7 +92,7 @@ async fn main() {
                     let home_dir = PathBuf::from(home_dir);
                     let full_path = home_dir.join(DEFAULT_CONFIG_PATH);
                     full_path
-                }else{
+                } else {
                     PathBuf::from(path)
                 }
             };
@@ -113,10 +114,28 @@ async fn main() {
         }
     };
     let cfg: bytestack::sdk::Config = toml::from_str(&content).unwrap();
-    println!("{:?}", cfg);
+    let handler = bytestack::sdk::Handler::new(cfg);
     match &cli.command {
         Commands::Stat { path } => {
-            info!("try to stat {path:?}")
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    error!("<PATH> is needed");
+                    exit(1);
+                }
+            };
+            info!("run stat on {path:?}");
+            let reader = handler.open_reader(path).unwrap();
+            let out = match reader.list_al().await {
+                Ok(stacks) => stacks,
+                Err(e) => {
+                    error!("list stack error: {}", e);
+                    exit(1);
+                }
+            };
+
+            let tbl = Table::new(out).to_string();
+            println!("{}",tbl);
         }
         Commands::LS {
             path,

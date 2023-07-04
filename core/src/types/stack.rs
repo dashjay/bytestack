@@ -1,5 +1,8 @@
 
 //! stack describe a bytestack abostractly
+use tabled::Tabled;
+
+#[derive(Tabled)]
 /// Stack hold some stack info: stack_id, last_modified, full_size, etc..
 pub struct Stack {
     /// stack_id of Stack
