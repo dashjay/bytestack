@@ -35,15 +35,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Adds files to myapp
-    Stat { path: Option<String> },
-    LS {
-        /// path is all kind of path
-        #[arg(short = 'p', long = "path")]
+    Stat {
         path: Option<String>,
-        #[arg(short = 'o', long = "output", value_enum)]
-        output: Option<String>,
-        #[arg(long = "output-path", default_value = "-")]
-        output_path: Option<String>,
+    },
+    LS {
+        path: Option<String>,
     },
     Get {
         /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
@@ -90,8 +86,7 @@ async fn main() {
                         },
                     };
                     let home_dir = PathBuf::from(home_dir);
-                    let full_path = home_dir.join(DEFAULT_CONFIG_PATH);
-                    full_path
+                    home_dir.join(DEFAULT_CONFIG_PATH)
                 } else {
                     PathBuf::from(path)
                 }
@@ -133,23 +128,44 @@ async fn main() {
                     exit(1);
                 }
             };
-
             let tbl = Table::new(out).to_string();
-            println!("{}",tbl);
+            println!("{}", tbl);
         }
-        Commands::LS {
-            path,
-            output,
-            output_path,
-        } => {
-            info!("try to ls {path:?}")
+        Commands::LS { path } => {
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    error!("<PATH> is needed");
+                    exit(1);
+                }
+            };
+
+            let reader = handler.open_reader(path).unwrap();
+            let stack_ids = match reader.list().await {
+                Ok(res) => res,
+                Err(e) => {
+                    eprintln!("stat path {} error: {:?}", path, e);
+                    exit(1)
+                }
+            };
+            for stack_id in stack_ids {
+                let res = match reader.list_stack(stack_id).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        eprintln!("list stack {} error: {:?}", stack_id, e);
+                        exit(1)
+                    }
+                };
+                res.iter()
+                    .for_each(|ir| println!("{},{}", stack_id, ir.index_id()))
+            }
         }
         Commands::Get {
             index_id,
             target,
             check_crc,
         } => {
-            info!("try to get {index_id:?} to {target:?} with_crc_check:{check_crc:?}")
+            
         }
     }
 }
