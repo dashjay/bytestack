@@ -23,11 +23,10 @@ Bytestack 是存储数十亿小文件的好方法。它基于优秀的开源工�
 
 ```
 
-对于元信息文件(meta)，我们存储17字节作为 Magic 头，分别是(2 uint64) 和 一个 ’\n’(10)，之后元信息项排在后面。
-
+对于元文件，我们存储一个 json 序列化的 magic header 和一个'\n'(10)，之后 meta item在后面，也是用 json 序列化的。
 ```
-| magic_number: u64 | stack_id: u64 | '\n': u8 | (17 bytes)
-| create_time: u64 | file_offset: u64 | cookie: u32 | file_size: u32 | filename: String | extra: Vec<u8> | (n bytes)
+| {"magic_number": u64, "stack_id": u64 }| '\n': u8 | (17 bytes)
+| {"create_time": u64, "file_offset": u64, "cookie": u32, "file_size": u32, "filename": String, extra: Vec<u8>}| (n bytes)
 | items ... | (n bytes)
 ```
 

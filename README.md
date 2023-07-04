@@ -25,11 +25,11 @@ For an index file, we store 16 bytes as a magic header(2 uint64), after that ind
 
 ```
 
-For a meta file, we store 17 bytes as a magic header(2 uint64) and a '\n'(10), after that meta items line up behind.
+For a meta file, we store a json marshaled magic header and a '\n'(10), after that meta items line up behind, also marshaled with json.
 
 ```
-| magic_number: u64 | stack_id: u64 | '\n': u8 | (17 bytes)
-| create_time: u64 | file_offset: u64 | cookie: u32 | file_size: u32 | filename: String | extra: Vec<u8> | (n bytes)
+| {"magic_number": u64, "stack_id": u64 }| '\n': u8 | (17 bytes)
+| {"create_time": u64, "file_offset": u64, "cookie": u32, "file_size": u32, "filename": String, extra: Vec<u8>}| (n bytes)
 | items ... | (n bytes)
 ```
 
