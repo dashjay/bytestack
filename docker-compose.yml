@@ -1,0 +1,17 @@
+version: "3"
+services:
+  mongo:
+    image: mongo:4.2.3
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - 27017:27017
+    command:
+      - mongod
+      - --dbpath
+      - /data/db
+      - --replSet
+      - rs0
+volumes:
+  mongo-data:

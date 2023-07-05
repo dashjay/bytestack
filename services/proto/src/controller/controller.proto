@@ -1,0 +1,12 @@
+syntax = "proto3";
+package bytestack_controller;
+
+message Empty{}
+
+message NextStackIDResp {
+    int64 stack_id = 1;
+}
+
+service Controller {
+    rpc NextStackID(Empty) returns (NextStackIDResp);
+}
