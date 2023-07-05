@@ -164,8 +164,6 @@ async fn main() {
             index_id,
             target,
             check_crc,
-        } => {
-            
-        }
+        } => {}
     }
 }
