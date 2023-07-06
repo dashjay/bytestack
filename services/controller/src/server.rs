@@ -4,11 +4,6 @@ use mongodb::bson::{doc, Document};
 use mongodb::Client;
 use proto::controller::controller_server::Controller;
 use proto::controller::{Empty, NextStackIdResp};
-
-pub mod bytestack_controller {
-    tonic::include_proto!("../proto/src/controller/bytestack_controller");
-}
-
 pub struct BytestackController {
     mongodb_client: Client,
 }

@@ -1,16 +1,12 @@
 FROM rust:1.70 as builder
 
-WORKDIR /usr/src
-ARG APP=controller
+WORKDIR /usr/src/bytestack
 
-WORKDIR /usr/src/$APP
-
-COPY ./src src
+COPY . .
 COPY Cargo.toml ./
-RUN cargo build
+RUN cargo build --release --manifest-path ./services/controller/Cargo.toml
 
-# Copy the app to an base Docker image, here we use distroless
 FROM gcr.io/distroless/cc-debian10
-COPY --from=builder /usr/local/cargo/bin/$APP /$APP
+COPY --from=builder $WORKDIR/target/release/controller /controller
 USER 1000
-ENTRYPOINT ["/$APP"]
+ENTRYPOINT ["/controller"]

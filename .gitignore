@@ -1,4 +1,5 @@
 /target
+/debug
 .idea
 .vscode
 .DS_Store
