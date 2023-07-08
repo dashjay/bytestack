@@ -344,6 +344,7 @@ dependencies = [
  "crc",
  "futures",
  "opendal",
+ "proto",
  "rand",
  "regex",
  "rusoto_credential",
@@ -351,6 +352,7 @@ dependencies = [
  "serde_json",
  "tabled",
  "tokio 1.29.1",
+ "tonic",
  "url",
 ]
 

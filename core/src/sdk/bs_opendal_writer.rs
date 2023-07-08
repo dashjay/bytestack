@@ -1,5 +1,6 @@
 //! bs_writer provides all tools for writing bytestacks
 
+use super::bs_id_generator;
 use super::err::{CustomError, ErrorKind};
 use crate::types::{
     DataMagicHeader, DataRecord, IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord,
@@ -134,16 +135,17 @@ impl InnerWriter {
 
 /// BytestackOpendalWriter is tool for writing the bytestack
 pub struct BytestackOpendalWriter {
-    id: u64,
+    id_generator: Box<dyn bs_id_generator::IdGenerator>,
     operator: Operator,
     prefix: String,
     inner_writer: Mutex<Option<InnerWriter>>,
 }
 
 impl BytestackOpendalWriter {
-    pub fn new(operator: Operator, prefix: String) -> Self {
+    pub fn new(remote_addr: String, operator: Operator, prefix: String) -> Self {
+        let client = bs_id_generator::RemoteIdGenerator::new(remote_addr);
         BytestackOpendalWriter {
-            id: 1,
+            id_generator: client,
             operator: operator,
             prefix: prefix,
             inner_writer: Mutex::<Option<InnerWriter>>::new(None),
@@ -160,8 +162,8 @@ impl BytestackOpendalWriter {
         let mut writer = match inner_writer.take() {
             Some(writer) => writer,
             None => {
-                let inner_new_writer = self.create_new_writers(self.id).await.unwrap();
-                self.id += 1;
+                let next_stack_id = self.id_generator.next_stack_id();
+                let inner_new_writer = self.create_new_writer(next_stack_id).await.unwrap();
                 inner_new_writer
             }
         };
