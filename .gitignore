@@ -1,4 +1,7 @@
 /target
+/vendor
+/debug
 .idea
 .vscode
 .DS_Store
+.zed/

@@ -1,21 +1,36 @@
+use std::str::FromStr;
+
 use super::err::{CustomError, ErrorKind};
 use super::BytestackOpendalReader;
 use super::BytestackOpendalWriter;
 use super::Config;
 use opendal::services::S3;
 use opendal::Operator;
-use std::env;
+use proto::controller::controller_client::ControllerClient;
+use tonic::transport::{Channel, Endpoint};
+
 use url::Url;
 
 /// BytestackOpendalHandler is entrance of sdk
 pub struct BytestackOpendalHandler {
     cfg: Config,
+    controller_cli: ControllerClient<Channel>,
 }
 
 impl BytestackOpendalHandler {
     /// new BytestackOpendalHandler
-    pub fn new(cfg: Config) -> Self {
-        BytestackOpendalHandler { cfg }
+    pub async fn new(cfg: Config) -> Self {
+        let channel =
+            match ControllerClient::connect(Endpoint::from_str(&cfg.controller).unwrap()).await {
+                Ok(res) => res,
+                Err(err) => {
+                    panic!("connect to {} error: {}", &cfg.controller, err);
+                }
+            };
+        BytestackOpendalHandler {
+            cfg,
+            controller_cli: channel,
+        }
     }
 
     fn get_operator_by_path(&self, path: &str) -> Operator {
@@ -46,7 +61,11 @@ impl BytestackOpendalHandler {
                 return Err(e);
             }
         };
-        Ok(BytestackOpendalReader::new(operator, prefix))
+        Ok(BytestackOpendalReader::new(
+            operator,
+            prefix,
+            self.controller_cli.clone(),
+        ))
     }
 
     /// open_writer return BytestackOpendalWriter for giving path
@@ -58,7 +77,11 @@ impl BytestackOpendalHandler {
                 return Err(e);
             }
         };
-        Ok(BytestackOpendalWriter::new(operator, prefix))
+        Ok(BytestackOpendalWriter::new(
+            operator,
+            prefix,
+            self.controller_cli.clone(),
+        ))
     }
     // pub fn open_appender(&self, path: &str) {}
 }
