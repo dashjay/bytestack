@@ -3581,6 +3581,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "write-and-read"
+version = "0.1.0"
+dependencies = [
+ "bytestack",
+ "futures",
+ "tokio 1.29.1",
+]
+
+[[package]]
 name = "ws2_32-sys"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

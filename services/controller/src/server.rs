@@ -27,8 +27,12 @@ impl Controller for BytestackController {
         let collection = db.collection::<Document>(COLLECTION_CONFIG);
         let res = collection
             .find_one_and_update(
-                doc! {"config":"next_stack_id"},
-                doc! {"next_stack_id": "$inc"},
+                doc! {
+                    "config": "next_stack_id"
+                },
+                doc! {
+                    "$inc": {"next_stack_id": 1}
+                },
                 None,
             )
             .await;
@@ -39,11 +43,23 @@ impl Controller for BytestackController {
             },
             Err(e) => return Err(Status::internal(e.to_string())),
         };
-        let next_stack_id = match res.get_i64("next_stack_id"){
-            Ok(id)=>{id},
-            Err(e)=>return Err(Status::internal(e.to_string())),
+        let next_stack_id = match res.get("next_stack_id") {
+            Some(id) => match id.as_i64() {
+                Some(e) => e as u64,
+                None => match id.as_i32() {
+                    Some(e) => e as u64,
+                    None => {
+                        return Err(Status::internal(format!(
+                            "field next_stack_id unexpected type"
+                        )));
+                    }
+                },
+            },
+            None => return Err(Status::internal(format!("mongo read nothing"))),
         };
-        let reply = NextStackIdResp { stack_id: next_stack_id };
+        let reply = NextStackIdResp {
+            stack_id: next_stack_id,
+        };
         Ok(Response::new(reply))
     }
 }

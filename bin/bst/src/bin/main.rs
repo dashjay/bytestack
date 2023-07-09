@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::{env, process::exit};
 use tabled::Table;
 
-use log::{error, info, warn};
+use log::{error, info};
 
 const DEFAULT_CONFIG_PATH_TEMPLATE: &str = "($HOME|%USERPROFILE%)/.config/bytestack/config.toml";
 const DEFAULT_CONFIG_PATH: &str = ".config/bytestack/config.toml";

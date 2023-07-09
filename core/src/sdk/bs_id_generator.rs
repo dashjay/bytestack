@@ -1,45 +1,31 @@
+use super::err::{CustomError, ErrorKind};
 use proto::controller::controller_client::ControllerClient;
-use std::sync::atomic::AtomicI64;
-use std::sync::atomic::Ordering;
+use proto::controller::Empty;
 use tonic::transport::Channel;
-
-pub trait IdGenerator {
-    fn next_stack_id(&self) -> i64;
-}
-
-pub struct StatcIdGenerator {
-    next_stack_id: AtomicI64,
-}
-
-impl StatcIdGenerator {
-    fn new(next_stack_id: i64) -> Self {
-        StatcIdGenerator {
-            next_stack_id: AtomicI64::new(next_stack_id),
-        }
-    }
-}
-
-impl IdGenerator for StatcIdGenerator {
-    fn next_stack_id(&self) -> i64 {
-        self.next_stack_id.fetch_add(1, Ordering::Relaxed)
-    }
-}
 
 pub struct RemoteIdGenerator {
     cli: ControllerClient<Channel>,
 }
 
 impl RemoteIdGenerator {
-    async pub fn new(target_addr: String) -> Self {
-        let channel = match ControllerClient::connect(url::Url::from(&target_addr)).await {
+    pub async fn new(target_addr: &'static str) -> Self {
+        let channel = match ControllerClient::connect(target_addr).await {
             Ok(res) => res,
             Err(err) => {
-                panic!("connect to {} error: {}", &target_addr, err);
+                panic!("connect to {} error: {}", target_addr, err);
             }
         };
 
-        RemoteIdGenerator {
-            cli: channel
-        }
+        RemoteIdGenerator { cli: channel }
+    }
+
+    pub async fn next_stack_id(&mut self) -> Result<u64, ErrorKind> {
+        let req = tonic::Request::new(Empty {});
+        match self.cli.next_stack_id(req).await {
+            Ok(resp) => return Ok(resp.get_ref().stack_id),
+            Err(err) => {
+                return Err(ErrorKind::IOError(CustomError::new(err.to_string())));
+            }
+        };
     }
 }

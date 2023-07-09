@@ -3,13 +3,12 @@ debug = true
 
 [workspace]
 default-members = ["core"]
-version = "0.1.0"
 exclude = ["examples"]
 members = [
   "core",
   "bin/bst",
-  "services/controller",
-  "services/proto"
+  "services/*",
+  "examples/write-and-read"
 ]
 resolver = "1"
 
@@ -22,3 +21,4 @@ version = "0.1.0"
 
 [workspace.dependencies]
 bytestack = { version = "0.1.0", path = "core" }
+proto = {version = "0.1.0", path ="proto"}

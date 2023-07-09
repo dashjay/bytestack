@@ -145,8 +145,7 @@ impl BytestackOpendalReader {
             match meta.mode() {
                 EntryMode::FILE => {
                     if de.name().ends_with(".idx") {
-                        let stack_id_str = de.name().strip_suffix(".idx").unwrap();
-                        let stack_id_u64 = u64::from_str_radix(stack_id_str, 10).unwrap();
+                        let stack_id_u64 = utils::parse_index_stack_id(de.name()).unwrap();
                         out.push(stack_id_u64);
                     }
                 }
@@ -172,8 +171,7 @@ impl BytestackOpendalReader {
             match meta.mode() {
                 EntryMode::FILE => {
                     if de.name().ends_with(".idx") {
-                        let stack_id_str = de.name().strip_suffix(".idx").unwrap();
-                        let stack_id_u64 = u64::from_str_radix(stack_id_str, 10).unwrap();
+                        let stack_id_u64 = utils::parse_index_stack_id(de.name()).unwrap();
                         let full_size = match self.list_stack(stack_id_u64).await {
                             Ok(irs) => {
                                 let mut sum = 0;
