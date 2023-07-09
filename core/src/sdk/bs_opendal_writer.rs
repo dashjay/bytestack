@@ -1,5 +1,6 @@
 //! bs_writer provides all tools for writing bytestacks
 
+use super::bs_id_generator;
 use super::err::{CustomError, ErrorKind};
 use crate::types::{
     DataMagicHeader, DataRecord, IndexMagicHeader, IndexRecord, MetaMagicHeader, MetaRecord,
@@ -16,8 +17,8 @@ use std::sync::Mutex;
 
 use opendal::Writer;
 
-const _MAX_DATA_BYTES: u64 = 10 * 1024 * 1024 * 1024;
-
+/// _MAX_DATA_BYTES for test now
+const _MAX_DATA_BYTES: usize = 5 * 1024 * 1024;
 /// InnnerWriter is the real one who write data.
 /// User may write data all the timem but we divided billions of data by every 10GB
 struct InnerWriter {
@@ -134,18 +135,22 @@ impl InnerWriter {
 
 /// BytestackOpendalWriter is tool for writing the bytestack
 pub struct BytestackOpendalWriter {
-    id: u64,
+    id_generator: bs_id_generator::RemoteIdGenerator,
     operator: Operator,
     prefix: String,
+    total_size: usize,
     inner_writer: Mutex<Option<InnerWriter>>,
 }
 
 impl BytestackOpendalWriter {
-    pub fn new(operator: Operator, prefix: String) -> Self {
+    /// new TODO doc
+    pub async fn new(remote_addr: &'static str, operator: Operator, prefix: String) -> Self {
+        let id_generator = bs_id_generator::RemoteIdGenerator::new(&remote_addr).await;
         BytestackOpendalWriter {
-            id: 1,
-            operator: operator,
-            prefix: prefix,
+            id_generator,
+            operator,
+            prefix,
+            total_size: 0,
             inner_writer: Mutex::<Option<InnerWriter>>::new(None),
         }
     }
@@ -156,19 +161,42 @@ impl BytestackOpendalWriter {
         filename: String,
         meta: Option<Vec<u8>>,
     ) -> Result<String, ErrorKind> {
+        let data_size = buf.len();
+        let full = self.total_size + data_size > _MAX_DATA_BYTES;
         let mut inner_writer = self.inner_writer.lock().unwrap();
         let mut writer = match inner_writer.take() {
-            Some(writer) => writer,
+            Some(writer) => {
+                if full {
+                    self.total_size = 0;
+                    match writer.close().await {
+                        Ok(_) => {}
+                        Err(e) => return Err(e),
+                    };
+                    let next_stack_id = match self.id_generator.next_stack_id().await {
+                        Ok(id) => id,
+                        Err(e) => return Err(e),
+                    };
+                    let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
+                    inner_new_writer
+                } else {
+                    writer
+                }
+            }
             None => {
-                let inner_new_writer = self.create_new_writers(self.id).await.unwrap();
-                self.id += 1;
+                let next_stack_id = match self.id_generator.next_stack_id().await {
+                    Ok(id) => id,
+                    Err(e) => return Err(e),
+                };
+                let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
                 inner_new_writer
             }
         };
+
         let id = match writer.write(buf, filename, meta).await {
             Ok(id) => id,
             Err(e) => return Err(e),
         };
+        self.total_size += data_size;
         inner_writer.replace(writer);
         Ok(id)
     }
@@ -216,7 +244,7 @@ impl BytestackOpendalWriter {
         Ok(InnerWriter {
             data_offset: 4096,
             meta_offset: mh_bytes_length as u64,
-            stack_id: stack_id,
+            stack_id,
             rng: rand::thread_rng(),
             _current_index_writer: index_writer,
             _current_meta_writer: meta_writer,

@@ -11,4 +11,6 @@ pub use bs_opendal::BytestackOpendalHandler as Handler;
 pub mod bs_opendal_config;
 pub use bs_opendal_config::*;
 
+pub mod bs_id_generator;
+
 pub mod err;

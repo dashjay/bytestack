@@ -3,3 +3,6 @@
 .idea
 .vscode
 .DS_Store
+Dockerfile.dev
+/vendor
+Dockerfile.dev

@@ -3,18 +3,21 @@ use bytestack::sdk;
 #[tokio::main]
 async fn main() {
     let handler = sdk::Handler::new(sdk::Config {
-        s3: sdk::S3Config {
+        s3: sdk::S3 {
             aws_access_key_id: "minioadmin".to_string(),
             aws_secret_access_key: "minioadmin".to_string(),
             endpoint: "http://localhost:9000".to_string(),
             region: "default".to_string(),
         },
     });
-    let mut bw = handler.open_writer("s3://test/dadadad.bs/").unwrap();
-    let mut idx = 0;
-    while idx < 100 {
-        let content = vec![idx; 4096];
-        let id = bw
+    let mut bw = handler
+        .open_writer("http://localhost:8080", "s3://test/dadadad.bs/")
+        .await
+        .unwrap();
+    let mut idx: i32 = 0;
+    while idx < 2000 {
+        let content = vec![(idx % 124) as u8; 4096];
+        let _id = bw
             .put(content, format!("filename-{}", idx), None)
             .await
             .expect("put data file");
@@ -33,8 +36,8 @@ async fn main() {
     for s in &stack_list {
         let mut iter = br.list_stack_al_iter(s.stack_id).await.unwrap();
         while let Some((ir, _mr)) = iter.next().await {
-            let data = match br
-            .fetch(format!("{},{}", s.stack_id, ir.index_id()), true)
+            let _data = match br
+                .fetch(format!("{},{}", s.stack_id, ir.index_id()), true)
                 .await
             {
                 Ok(data) => data,

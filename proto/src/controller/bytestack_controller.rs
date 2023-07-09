@@ -4,8 +4,8 @@ pub struct Empty {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NextStackIdResp {
-    #[prost(int64, tag = "1")]
-    pub stack_id: i64,
+    #[prost(uint64, tag = "1")]
+    pub stack_id: u64,
 }
 /// Generated client implementations.
 pub mod controller_client {

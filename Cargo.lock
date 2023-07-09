@@ -344,6 +344,7 @@ dependencies = [
  "crc",
  "futures",
  "opendal",
+ "proto",
  "rand",
  "regex",
  "rusoto_credential",
@@ -351,6 +352,7 @@ dependencies = [
  "serde_json",
  "tabled",
  "tokio 1.29.1",
+ "tonic",
  "url",
 ]
 
@@ -3576,6 +3578,15 @@ checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
 dependencies = [
  "cfg-if 1.0.0",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "write-and-read"
+version = "0.1.0"
+dependencies = [
+ "bytestack",
+ "futures",
+ "tokio 1.29.1",
 ]
 
 [[package]]

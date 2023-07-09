@@ -4,7 +4,6 @@ use super::BytestackOpendalWriter;
 use super::Config;
 use opendal::services::S3;
 use opendal::Operator;
-use std::env;
 use url::Url;
 
 /// BytestackOpendalHandler is entrance of sdk
@@ -50,7 +49,11 @@ impl BytestackOpendalHandler {
     }
 
     /// open_writer return BytestackOpendalWriter for giving path
-    pub fn open_writer(&self, path: &str) -> Result<BytestackOpendalWriter, ErrorKind> {
+    pub async fn open_writer(
+        &self,
+        remote_addr: &'static str,
+        path: &str,
+    ) -> Result<BytestackOpendalWriter, ErrorKind> {
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
             Ok(a) => a,
@@ -58,7 +61,7 @@ impl BytestackOpendalHandler {
                 return Err(e);
             }
         };
-        Ok(BytestackOpendalWriter::new(operator, prefix))
+        Ok(BytestackOpendalWriter::new(remote_addr, operator, prefix).await)
     }
     // pub fn open_appender(&self, path: &str) {}
 }
