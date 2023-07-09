@@ -11,9 +11,13 @@ use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use opendal::Reader;
+use proto::controller::controller_client::ControllerClient;
+
+use tonic::transport::Channel;
 
 /// BytestackReader is tool for reading the bytestack
 pub struct BytestackOpendalReader {
+    controller_cli: ControllerClient<Channel>,
     operator: Operator,
     prefix: String,
 }
@@ -125,10 +129,15 @@ impl OpendalFetcher {
 
 impl BytestackOpendalReader {
     /// new create BytestackOpendalReader
-    pub fn new(operator: Operator, prefix: String) -> Self {
+    pub fn new(
+        operator: Operator,
+        prefix: String,
+        controller_cli: ControllerClient<Channel>,
+    ) -> Self {
         Self {
-            operator: operator,
-            prefix: prefix,
+            controller_cli,
+            operator,
+            prefix,
         }
     }
 
