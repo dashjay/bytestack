@@ -3,9 +3,9 @@
 //! - SDK: All things in sdk
 //!
 //! # Quick Start
-//! ```
+//! ```rust,ignore
 //! use bytestack::sdk;
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() {
 //!     let config = sdk::Config {
@@ -18,7 +18,7 @@
 //!         },
 //!     };
 //!     let handler = sdk::Handler::new(config).await;
-//! 
+//!
 //!     let mut bw = handler.open_writer("s3://test/dadadad.bs/").unwrap();
 //!     let mut idx: i32 = 0;
 //!     while idx < 2000 {
@@ -30,7 +30,7 @@
 //!         idx += 1;
 //!     }
 //!     bw.close().await.unwrap();
-//! 
+//!
 //!     let br = handler.open_reader("s3://test/dadadad.bs/").unwrap();
 //!     let stack_list = br.list_al().await.unwrap();
 //!     for s in &stack_list {
@@ -54,7 +54,7 @@
 //!             };
 //!         }
 //!     }
-//! 
+//!
 //!     for s in &stack_list {
 //!         let mut iter = br.list_stack_al_with_data_iter(s.stack_id).await.unwrap();
 //!         while let Some((ir, _mr, data)) = iter.next().await {
