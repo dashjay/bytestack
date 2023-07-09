@@ -1,12 +1,38 @@
 syntax = "proto3";
-package bytestack_controller;
+package controller;
 
 message Empty{}
 
-message NextStackIDResp {
+message StackID {
     uint64 stack_id = 1;
 }
 
+message RegisterStackSourceReq {
+    uint64 stack_id = 1;
+    repeated string locations = 2;
+}
+
+message QueryRegisteredSourceResp {
+    repeated string locations = 1;
+}
+
+message LocateStackResp {
+    repeated string data_addrs = 1;
+}
+
+message PreLoadStatus{
+    message PreLoadProcess{
+        int64 total_size = 1;
+        int64 loaded_size = 2;
+        string bserver = 3;
+    }
+    repeated PreLoadProcess processes  = 1;
+}
+
 service Controller {
-    rpc NextStackID(Empty) returns (NextStackIDResp);
+    rpc NextStackID(Empty) returns (StackID);
+    rpc RegisterStackSource(RegisterStackSourceReq) returns (Empty);
+    rpc QueryRegisteredSource(StackID) returns (QueryRegisteredSourceResp);
+    rpc LocateStack(StackID) returns (LocateStackResp);
+    rpc PreLoad(StackID) returns (PreLoadStatus);
 }

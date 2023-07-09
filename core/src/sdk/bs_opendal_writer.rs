@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use opendal::Writer;
 
 /// _MAX_DATA_BYTES for test now
-const _MAX_DATA_BYTES: usize = 5 * 1024 * 1024;
+const _MAX_DATA_BYTES: usize = 5 * 1024 * 1024 * 1024;
 /// InnnerWriter is the real one who write data.
 /// User may write data all the timem but we divided billions of data by every 10GB
 struct InnerWriter {

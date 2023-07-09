@@ -3,7 +3,10 @@ use tonic::{Request, Response, Status};
 use mongodb::bson::{doc, Document};
 use mongodb::Client;
 use proto::controller::controller_server::Controller;
-use proto::controller::{Empty, NextStackIdResp};
+use proto::controller::{
+    Empty, LocateStackResp, PreLoadStatus, QueryRegisteredSourceResp, RegisterStackSourceReq,
+    StackId,
+};
 pub struct BytestackController {
     mongodb_client: Client,
 }
@@ -19,10 +22,7 @@ impl BytestackController {
 
 #[tonic::async_trait]
 impl Controller for BytestackController {
-    async fn next_stack_id(
-        &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<NextStackIdResp>, Status> {
+    async fn next_stack_id(&self, _request: Request<Empty>) -> Result<Response<StackId>, Status> {
         let db = self.mongodb_client.database(DB);
         let collection = db.collection::<Document>(COLLECTION_CONFIG);
         let res = collection
@@ -57,9 +57,29 @@ impl Controller for BytestackController {
             },
             None => return Err(Status::internal(format!("mongo read nothing"))),
         };
-        let reply = NextStackIdResp {
+        Ok(Response::new(StackId {
             stack_id: next_stack_id,
-        };
-        Ok(Response::new(reply))
+        }))
+    }
+    async fn register_stack_source(
+        &self,
+        request: Request<RegisterStackSourceReq>,
+    ) -> Result<Response<Empty>, Status> {
+        todo!()
+    }
+    async fn query_registered_source(
+        &self,
+        request: Request<StackId>,
+    ) -> Result<Response<QueryRegisteredSourceResp>, Status> {
+        todo!()
+    }
+    async fn locate_stack(
+        &self,
+        request: Request<StackId>,
+    ) -> Result<Response<LocateStackResp>, Status> {
+        todo!()
+    }
+    async fn pre_load(&self, request: Request<StackId>) -> Result<Response<PreLoadStatus>, Status> {
+        todo!()
     }
 }
