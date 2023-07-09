@@ -109,7 +109,7 @@ async fn main() {
         }
     };
     let cfg: bytestack::sdk::Config = toml::from_str(&content).unwrap();
-    let handler = bytestack::sdk::Handler::new(cfg);
+    let handler = bytestack::sdk::Handler::new(cfg).await;
     match &cli.command {
         Commands::Stat { path } => {
             let path = match path {
