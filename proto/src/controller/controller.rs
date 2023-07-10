@@ -41,7 +41,13 @@ pub struct PreLoad {
     #[prost(int64, tag = "4")]
     pub total_size: i64,
     #[prost(int64, tag = "5")]
-    pub loaded_size: i64,
+    pub loaded: i64,
+    #[prost(int64, tag = "6")]
+    pub creation_timestamp: i64,
+    #[prost(int64, tag = "7")]
+    pub loaded_timestamp: i64,
+    #[prost(int64, tag = "8")]
+    pub update_timestamp: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -23,3 +23,4 @@ version = "0.1.0"
 bytestack = { version = "0.1.0", path = "core" }
 proto = {version = "0.1.0", path ="proto"}
 serde = { version = "1.0", features = ["derive"] }
+futures = {version = "0.3.28"}

@@ -26,7 +26,11 @@ message PreLoad {
     string bserver = 2;
     string data_addr = 3;
     int64 total_size = 4;
-    int64 loaded_size = 5;
+    int64 loaded = 5;
+
+    int64 creation_timestamp = 6;
+    int64 loaded_timestamp = 7;
+    int64 update_timestamp = 8;
 }
 
 message PreLoads {

@@ -13,3 +13,4 @@ clap = { version = "4.3.10", features = ["derive"] }
 mongodb = "2.6.0"
 proto = { workspace = true }
 serde = { workspace = true }
+futures = { workspace = true}

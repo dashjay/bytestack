@@ -470,6 +470,7 @@ name = "controller"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "futures",
  "mongodb",
  "prost",
  "proto",
@@ -1957,6 +1958,7 @@ name = "proto"
 version = "0.1.0"
 dependencies = [
  "prost",
+ "serde",
  "tonic",
  "tonic-build",
 ]
