@@ -137,7 +137,7 @@ impl InnerWriter {
 
 /// BytestackOpendalWriter is tool for writing the bytestack
 pub struct BytestackOpendalWriter {
-    controller_cli: ControllerClient<Channel>,
+    controller_cli: Option<ControllerClient<Channel>>,
     operator: Operator,
     prefix: String,
     total_size: usize,
@@ -149,7 +149,7 @@ impl BytestackOpendalWriter {
     pub fn new(
         operator: Operator,
         prefix: String,
-        controller_cli: ControllerClient<Channel>,
+        controller_cli: Option<ControllerClient<Channel>>,
     ) -> Self {
         BytestackOpendalWriter {
             controller_cli,
@@ -178,11 +178,9 @@ impl BytestackOpendalWriter {
                         Err(e) => return Err(e),
                     };
                     let req = tonic::Request::new(Empty {});
-                    let next_stack_id = match self.controller_cli.next_stack_id(req).await {
-                        Ok(resp) => resp.get_ref().stack_id,
-                        Err(e) => {
-                            return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
-                        }
+                    let next_stack_id = match self.next_stack_id().await {
+                        Ok(id) => id,
+                        Err(e) => return Err(e),
                     };
                     let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
                     inner_new_writer
@@ -192,11 +190,9 @@ impl BytestackOpendalWriter {
             }
             None => {
                 let req = tonic::Request::new(Empty {});
-                let next_stack_id = match self.controller_cli.next_stack_id(req).await {
-                    Ok(resp) => resp.get_ref().stack_id,
-                    Err(e) => {
-                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
-                    }
+                let next_stack_id = match self.next_stack_id().await {
+                    Ok(id) => id,
+                    Err(e) => return Err(e),
                 };
                 let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
                 inner_new_writer
@@ -270,5 +266,20 @@ impl BytestackOpendalWriter {
             }
         }
         Ok(())
+    }
+
+    async fn next_stack_id(&self) -> Result<u64, ErrorKind> {
+        match &self.controller_cli {
+            Some(controller_cli) => {
+                let req = tonic::Request::new(Empty {});
+                match controller_cli.next_stack_id(req).await {
+                    Ok(resp) => return Ok(resp.get_ref().stack_id),
+                    Err(e) => {
+                        return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
+                    }
+                };
+            }
+            None => Ok(1),
+        }
     }
 }

@@ -17,7 +17,7 @@ use tonic::transport::Channel;
 
 /// BytestackReader is tool for reading the bytestack
 pub struct BytestackOpendalReader {
-    controller_cli: ControllerClient<Channel>,
+    controller_cli: Option<ControllerClient<Channel>>,
     operator: Operator,
     prefix: String,
 }
@@ -132,7 +132,7 @@ impl BytestackOpendalReader {
     pub fn new(
         operator: Operator,
         prefix: String,
-        controller_cli: ControllerClient<Channel>,
+        controller_cli: Option<ControllerClient<Channel>>,
     ) -> Self {
         Self {
             controller_cli,

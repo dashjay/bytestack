@@ -343,6 +343,7 @@ dependencies = [
  "clap",
  "crc",
  "futures",
+ "log",
  "opendal",
  "proto",
  "rand",

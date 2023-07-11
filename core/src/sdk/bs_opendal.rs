@@ -4,29 +4,36 @@ use super::err::{CustomError, ErrorKind};
 use super::BytestackOpendalReader;
 use super::BytestackOpendalWriter;
 use super::Config;
+use log::info;
 use opendal::services::S3;
 use opendal::Operator;
 use proto::controller::controller_client::ControllerClient;
 use tonic::transport::{Channel, Endpoint};
-
 use url::Url;
 
 /// BytestackOpendalHandler is entrance of sdk
 pub struct BytestackOpendalHandler {
     cfg: Config,
-    controller_cli: ControllerClient<Channel>,
+    controller_cli: Option<ControllerClient<Channel>>,
 }
 
 impl BytestackOpendalHandler {
     /// new BytestackOpendalHandler
     pub async fn new(cfg: Config) -> Self {
-        let channel =
-            match ControllerClient::connect(Endpoint::from_str(&cfg.controller).unwrap()).await {
-                Ok(res) => res,
-                Err(err) => {
-                    panic!("connect to {} error: {}", &cfg.controller, err);
+        let channel = {
+            if cfg.controller == "" {
+                info!(target: "bytestack/core", "no controller addr specified");
+                None
+            } else {
+                match ControllerClient::connect(Endpoint::from_str(&cfg.controller).unwrap()).await
+                {
+                    Ok(res) => Some(res),
+                    Err(err) => {
+                        panic!("connect to {} error: {}", &cfg.controller, err);
+                    }
                 }
-            };
+            }
+        };
         BytestackOpendalHandler {
             cfg,
             controller_cli: channel,
@@ -61,10 +68,16 @@ impl BytestackOpendalHandler {
                 return Err(e);
             }
         };
+        let controller_cli = {
+            match self.controller_cli {
+                Some(cli) => Some(cli.clone()),
+                None => None,
+            }
+        };
         Ok(BytestackOpendalReader::new(
             operator,
             prefix,
-            self.controller_cli.clone(),
+            controller_cli,
         ))
     }
 
@@ -77,10 +90,17 @@ impl BytestackOpendalHandler {
                 return Err(e);
             }
         };
+
+        let controller_cli = {
+            match self.controller_cli {
+                Some(cli) => Some(cli.clone()),
+                None => None,
+            }
+        };
         Ok(BytestackOpendalWriter::new(
             operator,
             prefix,
-            self.controller_cli.clone(),
+            controller_cli,
         ))
     }
     // pub fn open_appender(&self, path: &str) {}
