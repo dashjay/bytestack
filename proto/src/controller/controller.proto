@@ -21,20 +21,40 @@ message CallPreLoadReq{
     int64 replicas = 2;
 }
 
-message PreLoad {
-    uint64 stack_id = 1;
-    string bserver = 2;
-    string data_addr = 3;
-    int64 total_size = 4;
-    int64 loaded = 5;
 
-    int64 creation_timestamp = 6;
-    int64 loaded_timestamp = 7;
-    int64 update_timestamp = 8;
+enum PreLoadState{
+    INIT = 0;
+    PENDING = 1;
+    RUNNING = 2;
+    ERROR = 3;
+    DELETING = 4;
 }
 
-message PreLoads {
-    repeated PreLoad preloads = 1;
+message PreLoad {
+    uint64 stack_id = 1;
+
+    PreLoadState state = 2;
+    string bserver = 3;
+
+    int64 creation_timestamp = 4;
+    int64 loaded_timestamp = 5;
+    int64 update_timestamp = 6;
+}
+
+message PreLoadAssignment{
+    uint64 stack_id = 1;
+
+    uint64 total_size = 2;
+    uint64 loaded = 3;
+
+    string bserver = 4;
+    string data_addr = 5;
+
+    int64 creation_timestamp = 6;
+}
+
+message PreLoadAssignments {
+    repeated PreLoadAssignment preloads = 1;
 }
 
 service Controller {
@@ -51,11 +71,8 @@ service Controller {
     rpc QueryRegisteredSource(StackID) returns (QueryRegisteredSourceResp);
 
     // LocateStack help user find where the stack placed.
-    rpc LocateStack(StackID) returns (PreLoads);
+    rpc LocateStack(StackID) returns (PreLoadAssignments);
 
-    // PreLoad help user to do preload stack to bserver
-    rpc PreLoad(CallPreLoadReq) returns (PreLoads);
-
-    // UnPreLoad help user to un preload stack from bserver
-    rpc UnPreLoad(StackID) returns (Empty);
+    // PreLoad help user to do preload or unpreload stack to bserver
+    rpc PreLoad(CallPreLoadReq) returns (PreLoadAssignments);
 }
