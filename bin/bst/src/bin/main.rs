@@ -49,6 +49,7 @@ enum Commands {
         check_crc: Option<bool>,
     },
 
+    /// Bind stack-id to some source
     Bind {
         #[arg(long = "stack-id")]
         stack_id: Option<u64>,
@@ -60,7 +61,7 @@ enum Commands {
         cancel: Option<bool>,
     },
 
-    /// Preload
+    /// Preload create task for bserver to preload the dataset.
     Preload {
         /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
         #[arg(long = "stack-id")]
@@ -75,7 +76,6 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-
     bytestack::utils::init_logger(&cli.log_level);
 
     let content = bst::utils::read_config_file(&cli.config_path);

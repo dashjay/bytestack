@@ -32,13 +32,14 @@ enum PreLoadState{
 
 message PreLoad {
     uint64 stack_id = 1;
-
     PreLoadState state = 2;
-    string bserver = 3;
+    int64 creation_timestamp = 3;
 
-    int64 creation_timestamp = 4;
-    int64 loaded_timestamp = 5;
-    int64 update_timestamp = 6;
+    string bserver = 4;
+    uint64 size = 5;
+    uint64 loaded = 6;
+    int64 loaded_timestamp = 7;
+    int64 update_timestamp = 8;
 }
 
 message PreLoadAssignment{

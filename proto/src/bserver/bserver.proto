@@ -1,0 +1,18 @@
+syntax = "proto3";
+package bserver;
+import "controller";
+
+message Empty{}
+
+message PreLoadTask{
+    uint64 stack_id = 1;
+
+}
+
+message MaintainResp{
+    int64 assignment_count = 1;
+}
+
+service BServer{
+    rpc Maintain(MaintainReq) returns (StackID);
+}
