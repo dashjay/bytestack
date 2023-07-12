@@ -12,5 +12,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 clap = { version = "4.3.10", features = ["derive"] }
 mongodb = "2.6.0"
 proto = { workspace = true }
+bytestack = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 futures = { workspace = true}

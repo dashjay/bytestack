@@ -1,9 +1,9 @@
+use bytestack::utils::init_logger;
 use clap::Parser;
 use controller::server::BytestackController;
 use mongodb::{options::ClientOptions, Client};
 use proto::controller::controller_server::ControllerServer;
 use tonic::transport::Server;
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -23,6 +23,7 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let addr = cli.bind.unwrap().parse()?;
+    init_logger(&cli.log_level);
 
     let mut client_options = ClientOptions::parse(cli.mongo_uri.unwrap()).await?;
     client_options.app_name = Some("bytestack_controller".to_string());

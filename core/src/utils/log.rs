@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use log::{error, info, warn, Level, LevelFilter, Metadata, Record};
+use log::{info, Level, LevelFilter, Metadata, Record};
 
 pub static STDOUT_LOG: SimpleLogger = SimpleLogger;
 

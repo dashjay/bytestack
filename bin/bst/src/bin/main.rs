@@ -1,9 +1,8 @@
 use bst::utils;
 use clap::{Parser, Subcommand};
-use std::process::exit;
-use tabled::Table;
-
 use log::{error, info};
+use std::{fs::File, io::Write, process::exit};
+use tabled::Table;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,9 +29,11 @@ struct Cli {
 enum Commands {
     /// Stat try to list stacks under dir
     Stat { path: Option<String> },
+
     /// LS try to list all file in a stack
     LS { path: Option<String> },
-    /// Get
+
+    /// Get fetch data from origin
     Get {
         /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
         #[arg(short = 'i', long = "index_id")]
@@ -47,18 +48,40 @@ enum Commands {
         #[arg(short = 'c', long = "check_crc", default_value = "false")]
         check_crc: Option<bool>,
     },
+
+    Bind {
+        #[arg(long = "stack-id")]
+        stack_id: Option<u64>,
+
+        #[arg(long = "path")]
+        path: Option<String>,
+
+        #[arg(long = "cancel", default_value = "false")]
+        cancel: Option<bool>,
+    },
+
+    /// Preload
+    Preload {
+        /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
+        #[arg(long = "stack-id")]
+        stack_id: Option<u64>,
+
+        /// path: where to find the stack
+        #[arg(long = "replicas", default_value = "1")]
+        replicas: Option<i64>,
+    },
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
-    utils::init_logger(&cli.log_level);
+    bytestack::utils::init_logger(&cli.log_level);
 
     let content = bst::utils::read_config_file(&cli.config_path);
     let cfg: bytestack::sdk::Config = toml::from_str(&content).unwrap();
 
-    let handler = bytestack::sdk::Handler::new(cfg).await;
+    let mut handler = bytestack::sdk::Handler::new(cfg).await;
     match &cli.command {
         Commands::Stat { path } => {
             let path = match path {
@@ -115,7 +138,101 @@ async fn main() {
             target,
             check_crc,
         } => {
-            todo!()
+            let index_id = match index_id {
+                Some(id) => id,
+                None => {
+                    error!("index_id is needed");
+                    exit(1);
+                }
+            };
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    error!("path is needed");
+                    exit(1);
+                }
+            };
+            let reader = handler.open_reader(path).unwrap();
+            let data = match reader.fetch(index_id, check_crc.unwrap()).await {
+                Ok(res) => res,
+                Err(e) => {
+                    error!("fetch {} error {:?}", index_id, e);
+                    exit(1);
+                }
+            };
+            let target = match target {
+                Some(t) => t,
+                None => "-",
+            };
+            if target == "-" {
+                use std::io::{self, Write};
+                let mut stdout = io::stdout().lock();
+                let _ = stdout.write_all(&data);
+            } else {
+                let mut fd = File::create(target).unwrap();
+                let _ = fd.write(&data);
+            }
+        }
+        Commands::Bind {
+            stack_id,
+            path,
+            cancel,
+        } => {
+            let stack_id = match stack_id {
+                Some(id) => *id,
+                None => {
+                    error!("stack_id is needed");
+                    exit(1);
+                }
+            };
+            let path = match path {
+                Some(path) => path,
+                None => {
+                    error!("path is needed");
+                    exit(1);
+                }
+            };
+            if cancel.unwrap() {
+                let _resp = match handler.unbind_stack(stack_id, path).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("bind {} to {} error: {:?}", stack_id, path, e);
+                        exit(1);
+                    }
+                };
+            } else {
+                let _resp = match handler.bind_stack(stack_id, path).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("bind {} to {} error: {:?}", stack_id, path, e);
+                        exit(1);
+                    }
+                };
+            }
+        }
+        Commands::Preload { stack_id, replicas } => {
+            let stack_id = match stack_id {
+                Some(id) => *id,
+                None => {
+                    error!("stack_id is needed");
+                    exit(1);
+                }
+            };
+
+            match handler
+                .preload(stack_id, replicas.unwrap().to_owned())
+                .await
+            {
+                Ok(resp) => {
+                    for i in resp.preloads {
+                        println!("{:?}", i)
+                    }
+                }
+                Err(e) => {
+                    error!("preload {} error: {:?}", stack_id, e);
+                    exit(1);
+                }
+            };
         }
     }
 }

@@ -17,7 +17,7 @@ use tonic::transport::Channel;
 
 /// BytestackReader is tool for reading the bytestack
 pub struct BytestackOpendalReader {
-    controller_cli: Option<ControllerClient<Channel>>,
+    controller_cli: ControllerClient<Channel>,
     operator: Operator,
     prefix: String,
 }
@@ -132,7 +132,7 @@ impl BytestackOpendalReader {
     pub fn new(
         operator: Operator,
         prefix: String,
-        controller_cli: Option<ControllerClient<Channel>>,
+        controller_cli: ControllerClient<Channel>,
     ) -> Self {
         Self {
             controller_cli,
@@ -433,8 +433,8 @@ impl BytestackOpendalReader {
         })
     }
     /// fetch data by index_id
-    pub async fn fetch(&self, index_id: String, check_crc: bool) -> Result<Vec<u8>, ErrorKind> {
-        let pasred_index_id = match utils::parse_index_id(&index_id) {
+    pub async fn fetch(&self, index_id: &str, check_crc: bool) -> Result<Vec<u8>, ErrorKind> {
+        let pasred_index_id = match utils::parse_index_id(index_id) {
             Some(id) => id,
             None => {
                 return Err(ErrorKind::IOError(CustomError::new(format!(

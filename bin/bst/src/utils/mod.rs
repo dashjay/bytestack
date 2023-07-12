@@ -1,5 +1,3 @@
-mod log;
-pub use self::log::init_logger;
 use std::{env, fs::File, io::Read, path::PathBuf};
 
 pub const DEFAULT_CONFIG_PATH_TEMPLATE: &str =

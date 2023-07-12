@@ -1,5 +1,6 @@
 use super::types::{InnerPreLoad, InnerPreLoadAssignment};
 use futures::TryStreamExt;
+use log::{debug, info};
 use mongodb::{
     bson::{doc, Document},
     error::{
@@ -37,6 +38,7 @@ impl BytestackController {
 
 #[tonic::async_trait]
 impl Controller for BytestackController {
+    /// next_stack_id returns the next stack id.
     async fn next_stack_id(&self, _request: Request<Empty>) -> Result<Response<StackId>, Status> {
         let db = self.mongodb_client.database(DB);
         let collection = db.collection::<Document>(COLLECTION_CONFIG);
@@ -76,6 +78,8 @@ impl Controller for BytestackController {
             stack_id: next_stack_id,
         }))
     }
+
+    /// register_stack_source bind source to stack.
     async fn register_stack_source(
         &self,
         request: Request<StackSourceReq>,
@@ -100,6 +104,8 @@ impl Controller for BytestackController {
             Err(e) => return Err(Status::internal(e.to_string())),
         };
     }
+
+    // de_register_stack_source unbind source to stack.
     async fn de_register_stack_source(
         &self,
         request: Request<StackSourceReq>,
@@ -124,6 +130,8 @@ impl Controller for BytestackController {
             Err(e) => return Err(Status::internal(e.to_string())),
         };
     }
+
+    /// query_registered_source  query source of stack.
     async fn query_registered_source(
         &self,
         request: Request<StackId>,
@@ -154,6 +162,7 @@ impl Controller for BytestackController {
         Ok(Response::new(QueryRegisteredSourceResp { locations }))
     }
 
+    /// locate_stack find preloaded stack on bserver.
     async fn locate_stack(
         &self,
         request: Request<StackId>,
@@ -180,6 +189,7 @@ impl Controller for BytestackController {
         Ok(Response::new(PreLoadAssignments { preloads: out }))
     }
 
+    /// pre_load register preload for stack to bserver.
     async fn pre_load(
         &self,
         request: Request<CallPreLoadReq>,
@@ -192,6 +202,7 @@ impl Controller for BytestackController {
                 request.get_ref().replicas
             }
         };
+        info!(target: "service/controller->preload", "preload stack_id({}) to replica({})", stack_id, replicas);
         let db = self.mongodb_client.database(DB);
         let preload_coll = db.collection::<InnerPreLoad>(COLLECTION_PRELOADS);
         let mut sess = match self
@@ -210,7 +221,9 @@ impl Controller for BytestackController {
             .write_concern(WriteConcern::builder().w(Acknowledgment::Majority).build())
             .build();
         match sess.start_transaction(tr_options).await {
-            Ok(_) => {}
+            Ok(_) => {
+                info!(target: "service/controller->preload", "transaction started")
+            }
             Err(e) => {
                 return Err(Status::internal(e.to_string()));
             }
@@ -218,6 +231,7 @@ impl Controller for BytestackController {
         while let Err(error) =
             mongo_adjust_preload_replicas(&preload_coll, &mut sess, stack_id, replicas).await
         {
+            info!(target: "service/controller->preload", "run mongo_adjust_preload_replicas: {:?}", error);
             if !error.contains_label(TRANSIENT_TRANSACTION_ERROR) {
                 return Err(Status::internal(error.to_string()));
             }
@@ -249,12 +263,14 @@ impl Controller for BytestackController {
     }
 }
 
+/// mongo_adjust_preload_replicas change the replicas of stack preload to replicas.
 async fn mongo_adjust_preload_replicas(
     coll: &Collection<InnerPreLoad>,
     session: &mut ClientSession,
     stack_id: u64,
     replicas: i64,
 ) -> MongoResult<()> {
+    info!(target: "service/controller->mongo_adjust_preload_replicas", "start");
     // once delete triggered, we ignore it
     let count = coll
         .count_documents_with_session(
@@ -263,13 +279,18 @@ async fn mongo_adjust_preload_replicas(
             session,
         )
         .await? as i64;
+
+    info!(target: "service/controller->mongo_adjust_preload_replicas", "count = {}", count);
+
     if count == replicas {
+        info!(target: "service/controller->mongo_adjust_preload_replicas", "count = replicas, abort");
         session.abort_transaction().await?;
         return Ok(());
     }
 
-    // lock all exists preload
-    let _update_res = coll
+    if count != 0 {
+        // lock all exists preload
+        let _update_res = coll
         .update_many_with_session(
             doc! {"stack_id": stack_id as i64, "state": {"$ne": PreLoadState::Deleting as i32} },
             doc! {"$currentDate": {"update_timestamp": true}},
@@ -277,10 +298,12 @@ async fn mongo_adjust_preload_replicas(
             session,
         )
         .await?;
+    }
 
-    if count > replicas {
+    if count < replicas {
         let mut more_preload = replicas - count;
         while more_preload > 0 {
+            info!(target: "service/controller->mongo_adjust_preload_replicas", "need more preload = {}", more_preload);
             let insert_result = coll
                 .insert_one_with_session(InnerPreLoad::new(stack_id), None, session)
                 .await?;
@@ -291,6 +314,7 @@ async fn mongo_adjust_preload_replicas(
     } else {
         let mut less_preload = count - replicas;
         while less_preload > 0 {
+            info!(target: "service/controller->mongo_adjust_preload_replicas", "need less preload = {}", less_preload);
             let deletion_result = coll.delete_one_with_session(
                 doc! {"stack_id": stack_id as i64, "state": {"$ne": PreLoadState::Deleting as i32} },
                 DeleteOptions::builder().build(), session).await?;
@@ -299,7 +323,10 @@ async fn mongo_adjust_preload_replicas(
             }
         }
     }
+
+    // loop commit_transaction to success.
     loop {
+        info!(target: "service/controller->mongo_adjust_preload_replicas", "commit tran");
         let result = session.commit_transaction().await;
         if let Err(ref error) = result {
             if error.contains_label(UNKNOWN_TRANSACTION_COMMIT_RESULT) {

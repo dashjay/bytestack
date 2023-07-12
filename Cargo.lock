@@ -470,8 +470,10 @@ dependencies = [
 name = "controller"
 version = "0.1.0"
 dependencies = [
+ "bytestack",
  "clap",
  "futures",
+ "log",
  "mongodb",
  "prost",
  "proto",
