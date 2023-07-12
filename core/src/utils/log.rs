@@ -1,14 +1,18 @@
 use std::str::FromStr;
 
-use log::{info, Level, LevelFilter, Metadata, Record};
+use log::{info, LevelFilter, Metadata, Record};
 
-pub static STDOUT_LOG: SimpleLogger = SimpleLogger;
+pub static mut STDOUT_LOG: SimpleLogger = SimpleLogger {
+    level: LevelFilter::Info,
+};
 
-pub struct SimpleLogger;
+pub struct SimpleLogger {
+    level: LevelFilter,
+}
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= self.level
     }
 
     fn log(&self, record: &Record) {
@@ -19,6 +23,7 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
+/// init_logger simply set logger output to stdout and logger level
 pub fn init_logger(lvl: &Option<String>) {
     if let Some(level) = lvl {
         let level_str = level.to_string();
@@ -34,8 +39,11 @@ pub fn init_logger(lvl: &Option<String>) {
                 )
             }
         };
-        log::set_logger(&STDOUT_LOG).unwrap();
-        log::set_max_level(log_filter);
+        unsafe {
+            STDOUT_LOG.level = log_filter;
+            log::set_max_level(log_filter);
+            log::set_logger(&STDOUT_LOG).unwrap();
+        }
         info!("log::set_max_level: {}", log_filter.as_str().to_lowercase());
     }
 }

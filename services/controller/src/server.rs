@@ -19,6 +19,8 @@ use proto::controller::{
 
 use tonic::{Request, Response, Status};
 
+use serde::{Deserialize, Serialize};
+
 pub struct BytestackController {
     mongodb_client: Client,
 }
@@ -36,12 +38,18 @@ impl BytestackController {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct ConfigNextStackID {
+    config: String,
+    next_stack_id: u64,
+}
+
 #[tonic::async_trait]
 impl Controller for BytestackController {
     /// next_stack_id returns the next stack id.
     async fn next_stack_id(&self, _request: Request<Empty>) -> Result<Response<StackId>, Status> {
         let db = self.mongodb_client.database(DB);
-        let collection = db.collection::<Document>(COLLECTION_CONFIG);
+        let collection = db.collection::<ConfigNextStackID>(COLLECTION_CONFIG);
         let res = collection
             .find_one_and_update(
                 doc! {
@@ -56,26 +64,16 @@ impl Controller for BytestackController {
         let res = match res {
             Ok(res) => match res {
                 Some(res) => res,
-                None => return Err(Status::internal(format!("mongo read nothing"))),
+                None => {
+                    return Err(Status::internal(
+                        r#"{config:next_stack_id,next_stack_id:NumberLong(x)} should be insert to collection config"#,
+                    ))
+                }
             },
             Err(e) => return Err(Status::internal(e.to_string())),
         };
-        let next_stack_id = match res.get("next_stack_id") {
-            Some(id) => match id.as_i64() {
-                Some(e) => e as u64,
-                None => match id.as_i32() {
-                    Some(e) => e as u64,
-                    None => {
-                        return Err(Status::internal(format!(
-                            "field next_stack_id unexpected type"
-                        )));
-                    }
-                },
-            },
-            None => return Err(Status::internal(format!("mongo read nothing"))),
-        };
         Ok(Response::new(StackId {
-            stack_id: next_stack_id,
+            stack_id: res.next_stack_id,
         }))
     }
 

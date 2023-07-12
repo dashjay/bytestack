@@ -36,10 +36,8 @@ async fn main() {
     for s in &stack_list {
         let mut iter = br.list_stack_al_iter(s.stack_id).await.unwrap();
         while let Some((ir, _mr)) = iter.next().await {
-            let _data = match br
-                .fetch(format!("{},{}", s.stack_id, ir.index_id()), true)
-                .await
-            {
+            let index_id = format!("{},{}", s.stack_id, ir.index_id());
+            let _data = match br.fetch(&index_id, true).await {
                 Ok(data) => data,
                 Err(e) => {
                     eprintln!("fetch data error: {:?}", e);

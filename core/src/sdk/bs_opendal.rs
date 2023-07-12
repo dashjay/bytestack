@@ -4,9 +4,9 @@ use super::err::{CustomError, ErrorKind};
 use super::BytestackOpendalReader;
 use super::BytestackOpendalWriter;
 use super::Config;
-use log::info;
-use opendal::services::S3;
-use opendal::Operator;
+use log::{debug, info};
+use opendal::services::{Fs, S3};
+use opendal::{Builder, Operator};
 use proto::controller::PreLoadAssignments;
 use proto::controller::{controller_client::ControllerClient, CallPreLoadReq, StackSourceReq};
 
@@ -23,6 +23,10 @@ pub struct BytestackOpendalHandler {
 impl BytestackOpendalHandler {
     /// new BytestackOpendalHandler
     pub async fn new(cfg: Config) -> Self {
+        debug!(
+            target: "BytestackOpendalHandler",
+            "connect to controller: {}", &cfg.controller
+        );
         let channel = {
             if cfg.controller.is_empty() {
                 panic!("no controller addr specified")
@@ -53,6 +57,12 @@ impl BytestackOpendalHandler {
                     &self.cfg.s3.endpoint,
                 );
             }
+            "file" => {
+                let mut builder = Fs::default();
+                builder.root(&path);
+                let op = Operator::new(builder).unwrap().finish();
+                op
+            }
             _ => {
                 panic!("unknown scheme: {}, url: {}", url.scheme(), path)
             }
@@ -61,6 +71,7 @@ impl BytestackOpendalHandler {
 
     /// open_reader return BytestackOpendalReader for giving path
     pub fn open_reader(&self, path: &str) -> Result<BytestackOpendalReader, ErrorKind> {
+        debug!(target: "BytestackOpendalHandler", "open_reader on path: {}", path);
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
             Ok(a) => a,
