@@ -1,18 +1,26 @@
 syntax = "proto3";
 package bserver;
-import "controller";
 
 message Empty{}
 
-message PreLoadTask{
-    uint64 stack_id = 1;
-
+message MaintainReq{
+    // provides all kind of secrets for accessing data from source
+    // please deploy this service with TLS, for not transfering in plain text.
+    map<string, bytes> secrets = 1;
+    repeated PreloadTask tasks = 2;
 }
 
-message MaintainResp{
-    int64 assignment_count = 1;
+message PreLoadTask{
+    uint64 stack_id = 1;
+    // stack_size is sum of data_size, index_size and meta_size
+    uint64 stack_size = 2;
+    // source_path is all kind of source that this dataset placed.
+    repeated string source_path = 3;
+}
+
+message MaintainResp {
 }
 
 service BServer{
-    rpc Maintain(MaintainReq) returns (StackID);
+    rpc Maintain(MaintainReq) returns (Empty);
 }
