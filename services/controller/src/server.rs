@@ -13,7 +13,7 @@ use mongodb::{
     Client, ClientSession, Collection,
 };
 use proto::controller::{
-    controller_server::Controller, CallPreLoadReq, Empty, PreLoadAssignment as PbPreLoadAssignment,
+    controller_server::Controller, CallPreLoadReq, PreLoadAssignment as PbPreLoadAssignment,
     PreLoadAssignments, PreLoadState, QueryRegisteredSourceResp, StackId, StackSourceReq,
 };
 
@@ -47,7 +47,7 @@ struct ConfigNextStackID {
 #[tonic::async_trait]
 impl Controller for BytestackController {
     /// next_stack_id returns the next stack id.
-    async fn next_stack_id(&self, _request: Request<Empty>) -> Result<Response<StackId>, Status> {
+    async fn next_stack_id(&self, _request: Request<()>) -> Result<Response<StackId>, Status> {
         let db = self.mongodb_client.database(DB);
         let collection = db.collection::<ConfigNextStackID>(COLLECTION_CONFIG);
         let res = collection
@@ -81,7 +81,7 @@ impl Controller for BytestackController {
     async fn register_stack_source(
         &self,
         request: Request<StackSourceReq>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<()>, Status> {
         let db = self.mongodb_client.database(DB);
         let collection = db.collection::<Document>(COLLECTION_STACK);
         let stack_id = request.get_ref().stack_id as i64;
@@ -98,7 +98,7 @@ impl Controller for BytestackController {
             )
             .await;
         match res {
-            Ok(_) => return Ok(Response::new(Empty {})),
+            Ok(_) => return Ok(Response::new(())),
             Err(e) => return Err(Status::internal(e.to_string())),
         };
     }
@@ -107,7 +107,7 @@ impl Controller for BytestackController {
     async fn de_register_stack_source(
         &self,
         request: Request<StackSourceReq>,
-    ) -> Result<Response<Empty>, Status> {
+    ) -> Result<Response<()>, Status> {
         let db = self.mongodb_client.database(DB);
         let collection = db.collection::<Document>(COLLECTION_STACK);
         let stack_id = request.get_ref().stack_id as i64;
@@ -124,7 +124,7 @@ impl Controller for BytestackController {
             )
             .await;
         match res {
-            Ok(_) => return Ok(Response::new(Empty {})),
+            Ok(_) => return Ok(Response::new(())),
             Err(e) => return Err(Status::internal(e.to_string())),
         };
     }

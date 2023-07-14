@@ -6,7 +6,6 @@ use crate::types::{
 };
 use bincode;
 use proto::controller::controller_client::ControllerClient;
-use proto::controller::Empty;
 use tonic::transport::Channel;
 
 use crate::utils;
@@ -193,7 +192,7 @@ impl BytestackOpendalWriter {
         let mut writer = match writer {
             Some(writer) => writer,
             None => {
-                let req = tonic::Request::new(Empty {});
+                let req = tonic::Request::new(());
                 let next_stack_id = match self.controller_cli.next_stack_id(req).await {
                     Ok(resp) => resp.get_ref().stack_id,
                     Err(e) => {

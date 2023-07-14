@@ -1,8 +1,5 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Empty {}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StackId {
     #[prost(uint64, tag = "1")]
     pub stack_id: u64,
@@ -36,13 +33,17 @@ pub struct PreLoad {
     pub stack_id: u64,
     #[prost(enumeration = "PreLoadState", tag = "2")]
     pub state: i32,
-    #[prost(string, tag = "3")]
-    pub bserver: ::prost::alloc::string::String,
-    #[prost(int64, tag = "4")]
+    #[prost(int64, tag = "3")]
     pub creation_timestamp: i64,
-    #[prost(int64, tag = "5")]
+    #[prost(string, tag = "4")]
+    pub bserver: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub size: u64,
+    #[prost(uint64, tag = "6")]
+    pub loaded: u64,
+    #[prost(int64, tag = "7")]
     pub loaded_timestamp: i64,
-    #[prost(int64, tag = "6")]
+    #[prost(int64, tag = "8")]
     pub update_timestamp: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -190,7 +191,7 @@ pub mod controller_client {
         /// NextStackID try to get next_stack id from controller.
         pub async fn next_stack_id(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::StackId>, tonic::Status> {
             self.inner
                 .ready()
@@ -214,7 +215,7 @@ pub mod controller_client {
         pub async fn register_stack_source(
             &mut self,
             request: impl tonic::IntoRequest<super::StackSourceReq>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<()>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -237,7 +238,7 @@ pub mod controller_client {
         pub async fn de_register_stack_source(
             &mut self,
             request: impl tonic::IntoRequest<super::StackSourceReq>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<()>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -350,18 +351,18 @@ pub mod controller_server {
         /// NextStackID try to get next_stack id from controller.
         async fn next_stack_id(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<()>,
         ) -> std::result::Result<tonic::Response<super::StackId>, tonic::Status>;
         /// RegisterStackSource register stack_id to source.
         async fn register_stack_source(
             &self,
             request: tonic::Request<super::StackSourceReq>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<()>, tonic::Status>;
         /// DeRegisterStackSource deregister source from stack_id.
         async fn de_register_stack_source(
             &self,
             request: tonic::Request<super::StackSourceReq>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<()>, tonic::Status>;
         /// QueryRegisteredSource query registered source.
         async fn query_registered_source(
             &self,
@@ -469,17 +470,14 @@ pub mod controller_server {
                 "/controller.Controller/NextStackID" => {
                     #[allow(non_camel_case_types)]
                     struct NextStackIDSvc<T: Controller>(pub Arc<T>);
-                    impl<T: Controller> tonic::server::UnaryService<super::Empty>
+                    impl<T: Controller> tonic::server::UnaryService<()>
                     for NextStackIDSvc<T> {
                         type Response = super::StackId;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::Empty>,
-                        ) -> Self::Future {
+                        fn call(&mut self, request: tonic::Request<()>) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).next_stack_id(request).await
@@ -517,7 +515,7 @@ pub mod controller_server {
                         T: Controller,
                     > tonic::server::UnaryService<super::StackSourceReq>
                     for RegisterStackSourceSvc<T> {
-                        type Response = super::Empty;
+                        type Response = ();
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -563,7 +561,7 @@ pub mod controller_server {
                         T: Controller,
                     > tonic::server::UnaryService<super::StackSourceReq>
                     for DeRegisterStackSourceSvc<T> {
-                        type Response = super::Empty;
+                        type Response = ();
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,

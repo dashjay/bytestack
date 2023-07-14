@@ -3,11 +3,12 @@ debug = true
 
 [workspace]
 default-members = ["core"]
-#exclude = ["examples"]
+exclude = ["examples"]
 members = [
   "core",
   "bin/bst",
   "services/controller",
+  "services/turbo",
   "examples/write-and-read"
 ]
 resolver = "1"
@@ -24,4 +25,8 @@ bytestack = { version = "0.1.0", path = "core" }
 proto = {version = "0.1.0", path ="proto"}
 serde = { version = "1.0", features = ["derive"] }
 futures = {version = "0.3.28"}
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+clap = { version = "4.3.10", features = ["derive"] }
 log = "0.4.19"
+tonic = "0.9.2"
+prost = "0.11.9"

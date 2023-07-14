@@ -1,7 +1,6 @@
 syntax = "proto3";
 package controller;
-
-message Empty{}
+import "google/protobuf/empty.proto";
 
 message StackID {
     uint64 stack_id = 1;
@@ -60,13 +59,13 @@ message PreLoadAssignments {
 
 service Controller {
     // NextStackID try to get next_stack id from controller.
-    rpc NextStackID(Empty) returns (StackID);
+    rpc NextStackID(google.protobuf.Empty) returns (StackID);
 
     // RegisterStackSource register stack_id to source.
-    rpc RegisterStackSource(StackSourceReq) returns (Empty);
+    rpc RegisterStackSource(StackSourceReq) returns (google.protobuf.Empty);
 
     // DeRegisterStackSource deregister source from stack_id.
-    rpc DeRegisterStackSource(StackSourceReq) returns (Empty);
+    rpc DeRegisterStackSource(StackSourceReq) returns (google.protobuf.Empty);
 
     // QueryRegisteredSource query registered source.
     rpc QueryRegisteredSource(StackID) returns (QueryRegisteredSourceResp);

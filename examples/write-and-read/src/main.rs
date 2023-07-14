@@ -1,10 +1,9 @@
-use bytestack::sdk;
-
+use bytestack::{config, sdk};
 #[tokio::main]
 async fn main() {
     let config = sdk::Config {
         controller: String::from("http://localhost:8080"),
-        s3: sdk::S3 {
+        s3: config::S3 {
             aws_access_key_id: "minioadmin".to_string(),
             aws_secret_access_key: "minioadmin".to_string(),
             endpoint: "http://localhost:9000".to_string(),

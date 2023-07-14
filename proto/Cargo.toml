@@ -3,7 +3,13 @@ name = "proto"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "gen-turbo-proto"
+path = "src/gen-turbo-proto.rs"
+
+[[bin]]
+name = "gen-controller-proto"
+path = "src/gen-controller-proto.rs"
 
 [dependencies]
 prost = "0.11.9"

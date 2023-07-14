@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 pub struct InnerPreLoad {
     pub stack_id: u64,
     pub state: i32,
+    pub size: u64,
+    pub loaded: u64,
     pub bserver: String,
     pub creation_timestamp: DateTime,
     pub loaded_timestamp: DateTime,
@@ -20,6 +22,8 @@ impl InnerPreLoad {
     pub fn new(stack_id: u64) -> Self {
         Self {
             stack_id,
+            size: 0,
+            loaded: 0,
             state: PreLoadState::Init as i32,
             bserver: String::new(),
             creation_timestamp: DateTime::now(),
@@ -35,6 +39,8 @@ impl Into<PbPreLoad> for InnerPreLoad {
             stack_id: self.stack_id,
             state: self.state,
             bserver: self.bserver,
+            size: self.size,
+            loaded: self.loaded,
             creation_timestamp: self.creation_timestamp.timestamp_millis(),
             loaded_timestamp: self.loaded_timestamp.timestamp_millis(),
             update_timestamp: self.update_timestamp.timestamp_millis(),
@@ -45,6 +51,8 @@ impl Into<PbPreLoad> for InnerPreLoad {
 impl From<PbPreLoad> for InnerPreLoad {
     fn from(value: PbPreLoad) -> Self {
         Self {
+            size: value.size,
+            loaded: value.size,
             stack_id: value.stack_id,
             state: value.state,
             bserver: value.bserver,

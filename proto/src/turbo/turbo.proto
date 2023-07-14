@@ -1,13 +1,11 @@
 syntax = "proto3";
-package bserver;
-
-message Empty{}
+package turbo;
 
 message MaintainReq{
     // provides all kind of secrets for accessing data from source
     // please deploy this service with TLS, for not transfering in plain text.
     map<string, bytes> secrets = 1;
-    repeated PreloadTask tasks = 2;
+    repeated PreLoadTask tasks = 2;
 }
 
 message PreLoadTask{
@@ -18,9 +16,17 @@ message PreLoadTask{
     repeated string source_path = 3;
 }
 
-message MaintainResp {
+message PreLoadTaskStatus {
+    uint64 stack_id = 1;
+    uint64 stack_size = 2;
+    uint64 loaded_size = 3;
+    string last_err = 4;
 }
 
-service BServer{
-    rpc Maintain(MaintainReq) returns (Empty);
+message MaintainResp {
+    repeated PreLoadTaskStatus tasks_status = 1;
+}
+
+service Turbo{
+    rpc Maintain(MaintainReq) returns (MaintainResp);
 }

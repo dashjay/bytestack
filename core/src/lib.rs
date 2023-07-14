@@ -69,6 +69,7 @@
 // Deny unused qualifications.
 #![deny(unused_qualifications)]
 
+pub mod config;
 pub mod sdk;
 pub mod types;
 pub mod utils;
