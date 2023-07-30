@@ -1,7 +1,6 @@
 syntax = "proto3";
 package controller;
-
-message Empty{}
+import "google/protobuf/empty.proto";
 
 message StackID {
     uint64 stack_id = 1;
@@ -21,37 +20,59 @@ message CallPreLoadReq{
     int64 replicas = 2;
 }
 
-message PreLoad {
-    uint64 stack_id = 1;
-    string bserver = 2;
-    string data_addr = 3;
-    int64 total_size = 4;
-    int64 loaded_size = 5;
+
+enum PreLoadState{
+    INIT = 0;
+    PENDING = 1;
+    RUNNING = 2;
+    ERROR = 3;
+    DELETING = 4;
 }
 
-message PreLoads {
-    repeated PreLoad preloads = 1;
+message PreLoad {
+    uint64 stack_id = 1;
+    PreLoadState state = 2;
+    int64 creation_timestamp = 3;
+
+    string bserver = 4;
+    uint64 size = 5;
+    uint64 loaded = 6;
+    int64 loaded_timestamp = 7;
+    int64 update_timestamp = 8;
+}
+
+message PreLoadAssignment{
+    uint64 stack_id = 1;
+
+    uint64 total_size = 2;
+    uint64 loaded = 3;
+
+    string bserver = 4;
+    string data_addr = 5;
+
+    int64 creation_timestamp = 6;
+}
+
+message PreLoadAssignments {
+    repeated PreLoadAssignment preloads = 1;
 }
 
 service Controller {
     // NextStackID try to get next_stack id from controller.
-    rpc NextStackID(Empty) returns (StackID);
+    rpc NextStackID(google.protobuf.Empty) returns (StackID);
 
     // RegisterStackSource register stack_id to source.
-    rpc RegisterStackSource(StackSourceReq) returns (Empty);
+    rpc RegisterStackSource(StackSourceReq) returns (google.protobuf.Empty);
 
     // DeRegisterStackSource deregister source from stack_id.
-    rpc DeRegisterStackSource(StackSourceReq) returns (Empty);
+    rpc DeRegisterStackSource(StackSourceReq) returns (google.protobuf.Empty);
 
     // QueryRegisteredSource query registered source.
     rpc QueryRegisteredSource(StackID) returns (QueryRegisteredSourceResp);
 
     // LocateStack help user find where the stack placed.
-    rpc LocateStack(StackID) returns (PreLoads);
+    rpc LocateStack(StackID) returns (PreLoadAssignments);
 
-    // PreLoad help user to do preload stack to bserver
-    rpc PreLoad(CallPreLoadReq) returns (PreLoads);
-
-    // UnPreLoad help user to un preload stack from bserver
-    rpc UnPreLoad(StackID) returns (Empty);
+    // PreLoad help user to do preload or unpreload stack to bserver
+    rpc PreLoad(CallPreLoadReq) returns (PreLoadAssignments);
 }

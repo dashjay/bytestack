@@ -78,9 +78,9 @@ impl DataRecordHeader {
     fn new(cookie: u32, size: u32, crc: u32) -> Self {
         DataRecordHeader {
             data_magic_record_start: _DATA_RECORD_HEADER_MAGIC_START,
-            cookie: cookie,
-            size: size,
-            crc: crc,
+            cookie,
+            size,
+            crc,
             data_magic_record_end: _DATA_RECORD_HEADER_MAGIC_END,
         }
     }
@@ -156,7 +156,7 @@ impl DataRecord {
         assert!(zero_padding.len() == padding_size);
         DataRecord {
             header: DataRecordHeader::new(cookie, size, crc),
-            data: data,
+            data,
             padding: zero_padding,
         }
     }

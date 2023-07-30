@@ -10,3 +10,6 @@ pub use time::*;
 
 pub mod crc;
 pub use self::crc::CASTAGNOLI;
+
+mod log;
+pub use self::log::init_logger;

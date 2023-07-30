@@ -1,15 +1,8 @@
+use bst::utils;
 use clap::{Parser, Subcommand};
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::{env, process::exit};
-use tabled::Table;
-
 use log::{error, info};
-
-const DEFAULT_CONFIG_PATH_TEMPLATE: &str = "($HOME|%USERPROFILE%)/.config/bytestack/config.toml";
-const DEFAULT_CONFIG_PATH: &str = ".config/bytestack/config.toml";
+use std::{fs::File, io::Write, process::exit};
+use tabled::Table;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -20,7 +13,7 @@ struct Cli {
         short,
         long,
         value_name = "FILE",
-        default_value = DEFAULT_CONFIG_PATH_TEMPLATE
+        default_value = utils::DEFAULT_CONFIG_PATH_TEMPLATE
     )]
     config_path: Option<String>,
 
@@ -34,17 +27,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Adds files to myapp
-    Stat {
-        path: Option<String>,
-    },
-    LS {
-        path: Option<String>,
-    },
+    /// Stat try to list stacks under dir
+    Stat { path: Option<String> },
+
+    /// LS try to list all file in a stack
+    LS { path: Option<String> },
+
+    /// Get fetch data from origin
     Get {
         /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
         #[arg(short = 'i', long = "index_id")]
         index_id: Option<String>,
+        /// path: where to find stacks
+        #[arg(long = "path")]
+        path: Option<String>,
         /// target is where the file put
         #[arg(short = 't', long = "target", default_value = "-")]
         target: Option<String>,
@@ -52,64 +48,40 @@ enum Commands {
         #[arg(short = 'c', long = "check_crc", default_value = "false")]
         check_crc: Option<bool>,
     },
+
+    /// Bind stack-id to some source
+    Bind {
+        #[arg(long = "stack-id")]
+        stack_id: Option<u64>,
+
+        #[arg(long = "path")]
+        path: Option<String>,
+
+        #[arg(long = "cancel", default_value = "false")]
+        cancel: Option<bool>,
+    },
+
+    /// Preload create task for bserver to preload the dataset.
+    Preload {
+        /// index_id is given by ls, the unique way to access data, like 1,a90007cc79976
+        #[arg(long = "stack-id")]
+        stack_id: Option<u64>,
+
+        /// path: where to find the stack
+        #[arg(long = "replicas", default_value = "1")]
+        replicas: Option<i64>,
+    },
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    if let Some(level) = cli.log_level {
-        let log_filter = match log::LevelFilter::from_str(level.as_str()) {
-            Ok(l) => l,
-            Err(e) => {
-                let levels = log::Level::iter();
-                let levels_collect: Vec<String> =
-                    levels.map(|x| x.to_string().to_lowercase()).collect();
-                panic!(
-                    "unknown level: {}, parse error: {:?}, should in {:?}",
-                    level, e, levels_collect,
-                )
-            }
-        };
-        log::set_logger(&bst::utils::STDOUT_LOG).unwrap();
-        log::set_max_level(log_filter);
-        info!("log::set_max_level: {}", log_filter.as_str().to_lowercase());
-    }
-    let content = match &cli.config_path {
-        Some(path) => {
-            let path = {
-                if path == DEFAULT_CONFIG_PATH_TEMPLATE {
-                    let home_dir = match env::var("HOME") {
-                        Ok(dir) => dir,
-                        Err(_) => match env::var("USERPROFILE") {
-                            Ok(dir) => dir,
-                            Err(_) => panic!("get env error"),
-                        },
-                    };
-                    let home_dir = PathBuf::from(home_dir);
-                    home_dir.join(DEFAULT_CONFIG_PATH)
-                } else {
-                    PathBuf::from(path)
-                }
-            };
-            let mut file = match File::open(&path) {
-                Ok(file) => file,
-                Err(error) => panic!("open config file {:?} failed: {:?}", &path, error),
-            };
+    bytestack::utils::init_logger(&cli.log_level);
 
-            let mut content = String::new();
-            match file.read_to_string(&mut content) {
-                Ok(_) => content,
-                Err(error) => {
-                    panic!("read config file error {:?}", error);
-                }
-            }
-        }
-        None => {
-            panic!("no config specified");
-        }
-    };
+    let content = bst::utils::read_config_file(&cli.config_path);
     let cfg: bytestack::sdk::Config = toml::from_str(&content).unwrap();
-    let handler = bytestack::sdk::Handler::new(cfg).await;
+
+    let mut handler = bytestack::sdk::Handler::new(cfg).await;
     match &cli.command {
         Commands::Stat { path } => {
             let path = match path {
@@ -161,9 +133,106 @@ async fn main() {
             }
         }
         Commands::Get {
+            path,
             index_id,
             target,
             check_crc,
-        } => {}
+        } => {
+            let index_id = match index_id {
+                Some(id) => id,
+                None => {
+                    error!("index_id is needed");
+                    exit(1);
+                }
+            };
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    error!("path is needed");
+                    exit(1);
+                }
+            };
+            let reader = handler.open_reader(path).unwrap();
+            let data = match reader.fetch(index_id, check_crc.unwrap()).await {
+                Ok(res) => res,
+                Err(e) => {
+                    error!("fetch {} error {:?}", index_id, e);
+                    exit(1);
+                }
+            };
+            let target = match target {
+                Some(t) => t,
+                None => "-",
+            };
+            if target == "-" {
+                use std::io::{self, Write};
+                let mut stdout = io::stdout().lock();
+                let _ = stdout.write_all(&data);
+            } else {
+                let mut fd = File::create(target).unwrap();
+                let _ = fd.write(&data);
+            }
+        }
+        Commands::Bind {
+            stack_id,
+            path,
+            cancel,
+        } => {
+            let stack_id = match stack_id {
+                Some(id) => *id,
+                None => {
+                    error!("stack_id is needed");
+                    exit(1);
+                }
+            };
+            let path = match path {
+                Some(path) => path,
+                None => {
+                    error!("path is needed");
+                    exit(1);
+                }
+            };
+            if cancel.unwrap() {
+                let _resp = match handler.unbind_stack(stack_id, path).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("bind {} to {} error: {:?}", stack_id, path, e);
+                        exit(1);
+                    }
+                };
+            } else {
+                let _resp = match handler.bind_stack(stack_id, path).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("bind {} to {} error: {:?}", stack_id, path, e);
+                        exit(1);
+                    }
+                };
+            }
+        }
+        Commands::Preload { stack_id, replicas } => {
+            let stack_id = match stack_id {
+                Some(id) => *id,
+                None => {
+                    error!("stack_id is needed");
+                    exit(1);
+                }
+            };
+
+            match handler
+                .preload(stack_id, replicas.unwrap().to_owned())
+                .await
+            {
+                Ok(resp) => {
+                    for i in resp.preloads {
+                        println!("{:?}", i)
+                    }
+                }
+                Err(e) => {
+                    error!("preload {} error: {:?}", stack_id, e);
+                    exit(1);
+                }
+            };
+        }
     }
 }

@@ -4,11 +4,14 @@ use super::err::{CustomError, ErrorKind};
 use super::BytestackOpendalReader;
 use super::BytestackOpendalWriter;
 use super::Config;
-use opendal::services::S3;
-use opendal::Operator;
-use proto::controller::controller_client::ControllerClient;
-use tonic::transport::{Channel, Endpoint};
+use log::{debug, info};
+use opendal::services::{Fs, S3};
+use opendal::{Builder, Operator};
+use proto::controller::PreLoadAssignments;
+use proto::controller::{controller_client::ControllerClient, CallPreLoadReq, StackSourceReq};
 
+use tonic::transport::{Channel, Endpoint};
+use tonic::Request;
 use url::Url;
 
 /// BytestackOpendalHandler is entrance of sdk
@@ -20,13 +23,21 @@ pub struct BytestackOpendalHandler {
 impl BytestackOpendalHandler {
     /// new BytestackOpendalHandler
     pub async fn new(cfg: Config) -> Self {
-        let channel =
+        debug!(
+            target: "BytestackOpendalHandler",
+            "connect to controller: {}", &cfg.controller
+        );
+        let channel = {
+            if cfg.controller.is_empty() {
+                panic!("no controller addr specified")
+            }
             match ControllerClient::connect(Endpoint::from_str(&cfg.controller).unwrap()).await {
                 Ok(res) => res,
                 Err(err) => {
                     panic!("connect to {} error: {}", &cfg.controller, err);
                 }
-            };
+            }
+        };
         BytestackOpendalHandler {
             cfg,
             controller_cli: channel,
@@ -46,6 +57,12 @@ impl BytestackOpendalHandler {
                     &self.cfg.s3.endpoint,
                 );
             }
+            "file" => {
+                let mut builder = Fs::default();
+                builder.root(&path);
+                let op = Operator::new(builder).unwrap().finish();
+                op
+            }
             _ => {
                 panic!("unknown scheme: {}, url: {}", url.scheme(), path)
             }
@@ -54,6 +71,7 @@ impl BytestackOpendalHandler {
 
     /// open_reader return BytestackOpendalReader for giving path
     pub fn open_reader(&self, path: &str) -> Result<BytestackOpendalReader, ErrorKind> {
+        debug!(target: "BytestackOpendalHandler", "open_reader on path: {}", path);
         let operator = self.get_operator_by_path(path);
         let (_, prefix) = match parse_s3_url(path) {
             Ok(a) => a,
@@ -83,7 +101,45 @@ impl BytestackOpendalHandler {
             self.controller_cli.clone(),
         ))
     }
-    // pub fn open_appender(&self, path: &str) {}
+
+    /// bind_stack so that stack can be preload by bserver
+    pub async fn bind_stack(&mut self, stack_id: u64, path: &str) -> Result<(), ErrorKind> {
+        let req = Request::new(StackSourceReq {
+            stack_id,
+            locations: vec![path.to_string()],
+        });
+        let _resp = match self.controller_cli.register_stack_source(req).await {
+            Ok(resp) => resp,
+            Err(e) => return Err(ErrorKind::ControllerError(CustomError::new(e.to_string()))),
+        };
+        Ok(())
+    }
+
+    /// unbind_stack so that stack can not be preload by bserver
+    pub async fn unbind_stack(&mut self, stack_id: u64, path: &str) -> Result<(), ErrorKind> {
+        let req = Request::new(StackSourceReq {
+            stack_id,
+            locations: vec![path.to_string()],
+        });
+        let _resp = match self.controller_cli.de_register_stack_source(req).await {
+            Ok(resp) => resp,
+            Err(e) => return Err(ErrorKind::ControllerError(CustomError::new(e.to_string()))),
+        };
+        Ok(())
+    }
+
+    /// preload so that stack can not be preload by bserver
+    pub async fn preload(
+        &mut self,
+        stack_id: u64,
+        replicas: i64,
+    ) -> Result<PreLoadAssignments, ErrorKind> {
+        let req = Request::new(CallPreLoadReq { stack_id, replicas });
+        let _resp = match self.controller_cli.pre_load(req).await {
+            Ok(resp) => return Ok(resp.into_inner()),
+            Err(e) => return Err(ErrorKind::ControllerError(CustomError::new(e.to_string()))),
+        };
+    }
 }
 
 fn init_s3_operator_via_builder(

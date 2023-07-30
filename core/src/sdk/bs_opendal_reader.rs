@@ -433,8 +433,8 @@ impl BytestackOpendalReader {
         })
     }
     /// fetch data by index_id
-    pub async fn fetch(&self, index_id: String, check_crc: bool) -> Result<Vec<u8>, ErrorKind> {
-        let pasred_index_id = match utils::parse_index_id(&index_id) {
+    pub async fn fetch(&self, index_id: &str, check_crc: bool) -> Result<Vec<u8>, ErrorKind> {
+        let pasred_index_id = match utils::parse_index_id(index_id) {
             Some(id) => id,
             None => {
                 return Err(ErrorKind::IOError(CustomError::new(format!(

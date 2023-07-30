@@ -15,6 +15,7 @@ impl CustomError {
 #[derive(Debug)]
 pub enum ErrorKind {
     IOError(CustomError),
+    ControllerError(CustomError),
     CloseError(CustomError),
     InvalidArgument(CustomError),
 }

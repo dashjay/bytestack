@@ -6,7 +6,6 @@ use crate::types::{
 };
 use bincode;
 use proto::controller::controller_client::ControllerClient;
-use proto::controller::Empty;
 use tonic::transport::Channel;
 
 use crate::utils;
@@ -34,6 +33,7 @@ struct InnerWriter {
 }
 
 impl InnerWriter {
+    /// close
     async fn close(mut self) -> Result<(), ErrorKind> {
         if let Err(err) = self._current_data_writer.close().await {
             return Err(ErrorKind::CloseError(CustomError::new(err.to_string())));
@@ -47,6 +47,7 @@ impl InnerWriter {
         Ok(())
     }
 
+    /// write_index
     async fn write_index(&mut self, ir: IndexRecord) -> Result<usize, ErrorKind> {
         let data_bytes = bincode::serialize(&ir).unwrap();
         let index_bytes_length = data_bytes.len();
@@ -55,6 +56,8 @@ impl InnerWriter {
             Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
         }
     }
+
+    /// write_meta
     async fn write_meta(&mut self, mr: MetaRecord) -> Result<usize, ErrorKind> {
         let mut data_bytes = serde_json::to_vec(&mr).unwrap();
         data_bytes.push(b'\n');
@@ -64,6 +67,8 @@ impl InnerWriter {
             Err(err) => return Err(ErrorKind::IOError(CustomError::new(err.to_string()))),
         }
     }
+
+    /// write_data
     async fn write_data(&mut self, dr: DataRecord) -> Result<usize, ErrorKind> {
         let data_bytes = bincode::serialize(&dr.header).unwrap();
         let data_bytes_length = dr.size();
@@ -159,6 +164,7 @@ impl BytestackOpendalWriter {
             inner_writer: Mutex::<Option<InnerWriter>>::new(None),
         }
     }
+
     /// put puts data, filename and meta_info to server.
     pub async fn put(
         &mut self,
@@ -169,29 +175,24 @@ impl BytestackOpendalWriter {
         let data_size = buf.len();
         let full = self.total_size + data_size > _MAX_DATA_BYTES;
         let mut inner_writer = self.inner_writer.lock().unwrap();
-        let mut writer = match inner_writer.take() {
+        let writer = match inner_writer.take() {
             Some(writer) => {
-                if full {
-                    self.total_size = 0;
+                if !full {
+                    Some(writer)
+                } else {
                     match writer.close().await {
                         Ok(_) => {}
                         Err(e) => return Err(e),
                     };
-                    let req = tonic::Request::new(Empty {});
-                    let next_stack_id = match self.controller_cli.next_stack_id(req).await {
-                        Ok(resp) => resp.get_ref().stack_id,
-                        Err(e) => {
-                            return Err(ErrorKind::IOError(CustomError::new(e.to_string())));
-                        }
-                    };
-                    let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
-                    inner_new_writer
-                } else {
-                    writer
+                    None
                 }
             }
+            None => None,
+        };
+        let mut writer = match writer {
+            Some(writer) => writer,
             None => {
-                let req = tonic::Request::new(Empty {});
+                let req = tonic::Request::new(());
                 let next_stack_id = match self.controller_cli.next_stack_id(req).await {
                     Ok(resp) => resp.get_ref().stack_id,
                     Err(e) => {
@@ -199,6 +200,7 @@ impl BytestackOpendalWriter {
                     }
                 };
                 let inner_new_writer = self.create_new_writers(next_stack_id).await.unwrap();
+                self.total_size = 0;
                 inner_new_writer
             }
         };
